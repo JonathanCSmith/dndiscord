@@ -13,11 +13,11 @@ Common func in DNDBot
 
 
 class DNDBot:
-    TOKEN = ''
     is_music_module_enabled = True
     is_inventory_module_enabled = True
 
-    def __init__(self):
+    def __init__(self, token):
+        self.token = token
         self.data_path = os.path.join(".", "bot_data")
         self.modules = dict()
         self.description = '''dnd is AWESOME'''
@@ -77,7 +77,7 @@ class DNDBot:
         return data.load(file_path)
 
     def run(self):
-        self.bot.run(DNDBot.TOKEN)
+        self.bot.run(self.token)
 
     def add_basic_commands(self, bot):
         @bot.event
@@ -137,5 +137,6 @@ class DNDBot:
                         await ctx.send("Fuck off with your: " + str(dice_type))
 
 
-dnd_bot = DNDBot()
+config_data = data.load("./config.json")
+dnd_bot = DNDBot(config_data["discord_token"])
 dnd_bot.run()
