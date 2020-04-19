@@ -13,7 +13,8 @@ class SessionManager(Module):
         self.gm = None
         self.gm_real = None
         self.original_channel = None
-        self.channel = None
+        self.text_channel = None
+        self.voice_channel = None
 
     def cog_check(self, ctx: commands.Context):
         if not ctx.guild:
@@ -50,17 +51,18 @@ class SessionManager(Module):
         await ctx.send("Starting session: " + self.session)
 
         # Create our session channel
-        self.channel = await ctx.guild.create_voice_channel(self.session, bitrate=64000, userlimit=0, permissions_synced=True, category=ctx.guild.categories[1])
+        self.text_channel = await ctx.guild.create_text_channel("[DNDiscord] " + self.session, userlimit=0, permissions_synced=True, category=ctx.guild.categories[0])
+        self.voice_channel = await ctx.guild.create_voice_channel("[DNDiscord] " + self.session, bitrate=64000, userlimit=0, permissions_synced=True, category=ctx.guild.categories[1])
         if ctx.author.voice:
             self.original_channel = ctx.author.voice.channel
-            await ctx.author.move_to(self.channel)
-            await ctx.message("You are now active in: " + self.channel.name)
+            await ctx.author.move_to(self.voice_channel)
+            await ctx.message("You are now active in: " + self.voice_channel.name)
 
         # If the music player is present lets pull it into our session too!
         module = self.manager.get_module("MusicPlayer")
         if module is not None:
             ctx.voice_state = module.get_voice_state(ctx)
-            await module.summon_duck(ctx, channel=self.channel)
+            await module.summon_duck(ctx, channel=self.voice_channel)
 
     @commands.command(name="end")
     async def __end(self, ctx: commands.Context):
@@ -79,6 +81,7 @@ class SessionManager(Module):
 
         if self.original_channel:
             await ctx.author.move_to(self.original_channel)
-            await ctx.message("You have been returned to: " + self.channel.name)
+            await ctx.message("You have been returned to: " + self.voice_channel.name)
 
-        await self.channel.delete()
+        await self.voice_channel.delete()
+        await self.text_channel.delete()

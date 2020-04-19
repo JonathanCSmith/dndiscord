@@ -26,3 +26,6 @@ class MusicEntry:
         for tag in new_tags:
             if tag not in self.tags:
                 self.tags.append(tag)
+
+    def __str__(self):
+        return "Entry for: " + self.url + " with tags: " + str(self.tags)

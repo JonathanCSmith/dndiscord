@@ -93,11 +93,6 @@ class DNDBot:
             await ctx.send("Hello intrepid adventurer!")
 
         @bot.command()
-        async def add(ctx, left: int, right: int):
-            """Adds two numbers together."""
-            await ctx.send(left + right)
-
-        @bot.command()
         async def roll(ctx, dice_type):
             """Rolls the dice"""
             try:
