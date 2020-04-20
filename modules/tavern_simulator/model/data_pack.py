@@ -9,7 +9,7 @@ TODO: We could turn the 'values' of prerequisites into an alias repository inste
 
 
 class Data:
-    def __int__(self, name, prerequisites=None, provides=None):
+    def __int__(self, name, prerequisites=None, provides=None, description=""):
         self.name = name
 
         if prerequisites is None:
@@ -26,8 +26,16 @@ class Data:
             provides = dict()
         self.provides = provides
 
+        self.description = description
+
+    def append_prerequisite(self, key, value):
+        self.prerequisites[key] = value
+
     def get_prerequisites(self):
         return self.prerequisites
+
+    def append_provided(self, key, value):
+        self.provides[key] = value
 
     def get_provided(self):
         return self.provides
@@ -74,8 +82,8 @@ class Staff(Data):
 
 
 class Purchase(Data):
-    def __init__(self, name, cost, provided=None, prerequisites=None):
-        super().__int__(name, provides=provided, prerequisites=prerequisites)
+    def __init__(self, name, cost, prerequisites=None, provides=None):
+        super().__int__(name, provides=provides, prerequisites=prerequisites)
 
         self.cost = cost
 

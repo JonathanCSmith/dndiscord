@@ -84,7 +84,7 @@ if testing:
     barrel_vault_key_vals[basic_drinks.get_maximum_of_service_offered_tags()] = 100
     barrel_vault_key_vals["maximum_drinks"] = 50
     barrel_vault_key_vals["store_basic_drinks"] = "YES"
-    barrel_vault = Purchase("basic_barrel_vault", 500, provided=barrel_vault_key_vals)
+    barrel_vault = Purchase("basic_barrel_vault", 500, provides=barrel_vault_key_vals)
     data_pack.add_purchaseable(barrel_vault)
 
     basic_taproom_key_vals = dict()
@@ -93,7 +93,7 @@ if testing:
     basic_taproom_key_vals[Patron.maximum_occupancy_limit_tag] = 50
     basic_taproom_key_vals["sell_basic_drinks"] = "YES"
     basic_taproom_key_vals["taproom"] = "YES"
-    basic_taproom = Purchase("basic_taproom", 500, provided=basic_taproom_key_vals)
+    basic_taproom = Purchase("basic_taproom", 500, provides=basic_taproom_key_vals)
     data_pack.add_purchaseable(basic_taproom)
 
     # Prebuilt staff

@@ -8,23 +8,23 @@ from utils import math, data
 
 
 class TavernStatus:
-    def __init__(self, tavern_upgrades=None, staff=None):
-        if tavern_upgrades is None:
-            tavern_upgrades = list()
+    def __init__(self, tavern_purchases=None, staff=None):
+        if tavern_purchases is None:
+            tavern_purchases = list()
         if staff is None:
             staff = dict()
 
-        self.tavern_upgrades = tavern_upgrades
+        self.tavern_purchases = tavern_purchases
         self.staff = staff
 
-    def add_upgrade(self, upgrade):
-        self.tavern_upgrades.append(upgrade.name)
+    def add_purchase(self, upgrade):
+        self.tavern_purchases.append(upgrade.name)
 
-    def get_upgrades(self):
-        return self.tavern_upgrades
+    def get_purchases(self):
+        return self.tavern_purchases
 
-    def set_upgrades(self, upgrades):
-        self.tavern_upgrades = upgrades
+    def set_purchases(self, upgrades):
+        self.tavern_purchases = upgrades
 
     def hire_staff(self, staff, amount=1):
         if staff.name in self.staff:
@@ -36,7 +36,7 @@ class TavernStatus:
         return self.staff
 
     def clear(self):
-        self.tavern_upgrades.clear()
+        self.tavern_purchases.clear()
         self.staff.clear()
 
 
@@ -58,6 +58,7 @@ class Tavern:
         self.load()
 
     def provides_for(self, prerequisites):
+        # TODO: We should handle values here also
         return len(set(prerequisites) - set(self.provided)) == 0
 
     def apply_purchase(self, purchase):
@@ -65,7 +66,7 @@ class Tavern:
             return
 
         if isinstance(purchase, Purchase):
-            self.tavern_status.add_upgrade(purchase)
+            self.tavern_status.add_purchase(purchase)
 
         elif isinstance(purchase, Staff):
             self.tavern_status.hire_staff(purchase)
@@ -98,12 +99,12 @@ class Tavern:
         # Gather our purchases
         all_purchases = list()
 
-        # Check upgrades
-        possible_upgrades = self.tavern_status.get_upgrades()
-        for possible_upgrade in possible_upgrades:
-            upgrade = self.data_pack.get_purchaseable(possible_upgrade)
-            if upgrade is not None and self.provides_for(upgrade.get_prerequisites()):
-                all_purchases.append(upgrade)
+        # Check purchases
+        possible_purchases = self.tavern_status.get_purchases()
+        for possible_purchase in possible_purchases:
+            purchase = self.data_pack.get_purchaseable(possible_purchase)
+            if purchase is not None and self.provides_for(purchase.get_prerequisites()):
+                all_purchases.append(purchase)
 
         # Check staff
         possible_staff = self.tavern_status.get_staff().keys()
@@ -218,7 +219,7 @@ class Tavern:
 
     def determine_max_occupancy(self):
         max_occupancy_modifiers = list()
-        for upgrade_key in self.tavern_status.get_upgrades():
+        for upgrade_key in self.tavern_status.get_purchases():
             upgrade = self.data_pack.get_purchaseable(upgrade_key)
             max_occupancy_modifiers.extend(upgrade.get_provided_value(Patron.maximum_occupancy_limit_tag))
         self.set_maximum_occupancy(sum(max_occupancy_modifiers))
@@ -229,7 +230,7 @@ class Tavern:
             remaining_requirements = set(service.get_prerequisites())
 
             # Remove any things provided by our upgrades
-            for upgrade_key in self.tavern_status.get_upgrades():
+            for upgrade_key in self.tavern_status.get_purchases():
                 upgrade = self.data_pack.get_purchaseable(upgrade_key)
                 provided = upgrade.get_provided()
                 remaining_requirements = remaining_requirements.difference(provided)
@@ -246,7 +247,7 @@ class Tavern:
 
                 # Check our upgrade for inhibitions
                 applicable_values = list()
-                for upgrade_key in self.tavern_status.get_upgrades():
+                for upgrade_key in self.tavern_status.get_purchases():
                     upgrade = self.data_pack.get_purchaseable(upgrade_key)
                     applicable_values.extend(upgrade.get_provided_value(max_modifier_tags))
 
@@ -278,7 +279,7 @@ class Tavern:
             avg_occupancy = list()
             max_occupancy_for_patron_type = list()
             max_occupancy_for_patron_type.append(self.get_maximum_occupancy())
-            current_upgrades = self.tavern_status.get_upgrades()
+            current_upgrades = self.tavern_status.get_purchases()
             for upgrade_key in current_upgrades:
                 upgrade = self.data_pack.get_purchaseable(upgrade_key)
 
