@@ -1,9 +1,7 @@
-import functools
 import math
 
 import discord
 from discord.ext import commands
-from discord.ext.commands import MissingAnyRole
 
 from module_properties import Module
 from modules.music import data
@@ -11,8 +9,7 @@ from modules.music.data import Music
 from modules.music.music_properties.music import VoiceError, Song, VoiceState
 from modules.music.music_properties.ytdl_source import YTDLSource, YTDLError
 
-from utils import decorators
-from utils.permissions import CommandRunError
+from utils.errors import CommandRunError
 from utils.strings import find_urls
 
 """
@@ -55,6 +52,8 @@ TODO: Queue and now can be opened up if we can ensure privacy, but its not worth
 TODO: Investigate bug where bot is technically playing a tune, is removed, and then when it attempts to rejoin it cannot (delete based perhaps?) MAY BE FIXED
 TODO: Perhaps add_tagged (and equivalent) should add all songs that contain the tags provided? (i.e. they must contain all tags, but they may also have others - proposed tags must be a subset of owned tags)?
 TODO: This does not work if the bot is a member of multiple guilds
+TODO: Better information output on ALL commands
+TODO: Add did not output an indication that a track has been added in latest test
 """
 
 
@@ -94,76 +93,49 @@ class MusicPlayer(Module):
 
         await ctx.send('An error occurred: {}'.format(str(error)))
 
-    def run_permissions_check(self, ctx, module_source=None, command=None):
-        # We are not interested in these
-        if module_source != "music":
-            return True
+    def is_owner(self, ctx):
+        game_manager = self.manager.get_module("GameManager")
+        if game_manager and game_manager.get_game():
+            if ctx.author.id != game_manager.get_gm():
+                return False
+
+        elif self.owner != ctx.author.id:
+            return False
+
+        return True
+
+    def is_member(self, ctx):
+        game_manager = self.manager.get_module("GameManager")
+        if game_manager and game_manager.get_game():
+            return game_manager.is_adventurer(ctx.author.id)
+        elif ctx.voice_state.voice:
+            return ctx.author.id in ctx.voice_state.voice.members
+        else:
+            return False
+
+    def can_run(self, ctx, requires_voice):
+        # Early fail if we require voice
+        if not ctx.voice_state.voice:
+            return False
 
         # Admins can always!
         if ctx.author.guild_permissions.administrator:
             return True
 
-        # Certain roles can actually start the bot
-        elif command == "summon":
-            items = ["DJ", "GM"]
-            getter = functools.partial(discord.utils.get, ctx.author.roles)
-            if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for
-                   item in items):
-                return True
-            raise MissingAnyRole(items)
+        if self.permissions == 1:
+            return self.is_owner(ctx)
 
-        # Check if we are the owner for this
-        elif command == "everybody_dj" or command == "channel_dj" or command == "owner_dj":
-            if len(self.bot.voice_clients) == 0:
-                raise CommandRunError("This command cannot be run without me being in a channel first!")
-
-            game_manager = self.manager.get_module("GameManager")
-            if game_manager and game_manager.get_game():
-                if ctx.author.id != game_manager.get_gm():
-                    raise CommandRunError(
-                        "A game is currently using the music bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
-
-            # Check for ownership
-            elif self.owner != ctx.author.id:
-                raise CommandRunError(
-                    "A game is currently using the musics bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
+        elif self.permissions == 2:
+            return self.is_owner(ctx) or self.is_member(ctx)
 
         else:
+            return True
 
-            # Check ownership
-            if self.permissions == 3:
-                game_manager = self.manager.get_module("GameManager")
-                if game_manager and game_manager.get_game():
-                    if ctx.author.id != game_manager.get_gm():
-                        raise CommandRunError(
-                            "This command cannot be run without being the game manager of the currently running game.")
 
-                elif self.owner != ctx.author.id:
-                    raise CommandRunError(
-                        "A game is currently using the music bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
-
-            # Check channel membership and ownership
-            elif self.permissions == 2:
-
-                # Check if the caller is an adventurer in the game
-                game_manager = self.manager.get_module("GameManager")
-                if game_manager and game_manager.get_game():
-                    if not game_manager.is_adventurer(ctx.author.it):
-                        raise CommandRunError("Only adventurers in the current session can run commands for the bot currently.")
-
-                # Otherwise ensure that the caller is currently listening in the channel
-                #TODO This will throw a fit if the bot isnt in voice
-                elif ctx.voice_state.voice and (not ctx.author.voice or ctx.author.voice.channel.name != ctx.voice_state.voice.channel.name):
-                    raise CommandRunError("You can only run this command if your are in the same channel as the bot!")
-
-        return True
 
     @commands.command(name='summon')
-    @decorators.can_run(module_source="music", command="summon")
+    @commands.has_any_role("DJ", "GM", "@admin")
     async def _summon(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
-        await self.summon_duck(ctx, channel=channel)
-
-    async def summon_duck(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
         """Summons the bot to a voice channel.
         If no channel was specified, it joins your channel.
         """
@@ -188,9 +160,10 @@ class MusicPlayer(Module):
         ctx.voice_state.voice = await destination.connect()
 
     @commands.command(name='kick', aliases=['leave', 'disconnect'])
-    @decorators.can_run(module_source="music", command="kick")
     async def _kick(self, ctx: commands.Context):
         """Clears the queue and leaves the voice channel."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if not ctx.voice_state.voice:
             return await ctx.send('Not connected to any voice channel.')
@@ -200,11 +173,12 @@ class MusicPlayer(Module):
         self.owner = None
 
     @commands.command(name='next')
-    @decorators.can_run(module_source="music", command="next")
     async def _next(self, ctx: commands.Context):
         """Vote to skip a song. The requester can automatically skip.
         3 skip votes are needed for the song to be skipped.
         """
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if not ctx.voice_state.is_playing:
             return await ctx.send('Not playing any music right now...')
@@ -228,9 +202,10 @@ class MusicPlayer(Module):
             await ctx.send('You have already voted to skip this song.')
 
     @commands.command(name='volume')
-    @decorators.can_run(module_source="music", command="volume")
     async def _volume(self, ctx: commands.Context, *, volume: int):
         """Sets the volume of the player."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if not ctx.voice_state.is_playing:
             return await ctx.send('Nothing being played at the moment.')
@@ -242,27 +217,30 @@ class MusicPlayer(Module):
         await ctx.send('Volume of the player set to {}%'.format(volume))
 
     @commands.command(name='pause')
-    @decorators.can_run(module_source="music", command="pause")
     async def _pause(self, ctx: commands.Context):
         """Pauses the currently playing song."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if ctx.voice_state.is_playing and ctx.voice_state.voice.is_playing():
             ctx.voice_state.voice.pause()
             await ctx.message.add_reaction('⏯')
 
     @commands.command(name='resume')
-    @decorators.can_run(module_source="music", command="resume")
     async def _resume(self, ctx: commands.Context):
         """Resumes a currently paused song."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if ctx.voice_state.is_playing and ctx.voice_state.voice.is_paused():
             ctx.voice_state.voice.resume()
             await ctx.message.add_reaction('⏯')
 
     @commands.command(name='stop_and_clear')
-    @decorators.can_run(module_source="music", command="stop_and_clear")
     async def _stop_and_clear(self, ctx: commands.Context):
         """Stops playing song and clears the queue."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         ctx.voice_state.songs.clear()
 
@@ -271,9 +249,10 @@ class MusicPlayer(Module):
             await ctx.message.add_reaction('⏹')
 
     @commands.command(name='shuffle')
-    @decorators.can_run(module_source="music", command="shuffle")
     async def _shuffle(self, ctx: commands.Context):
         """Shuffles the queue."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if len(ctx.voice_state.songs) == 0:
             return await ctx.send('Empty queue.')
@@ -282,9 +261,10 @@ class MusicPlayer(Module):
         await ctx.message.add_reaction('✅')
 
     @commands.command(name='remove')
-    @decorators.can_run(module_source="music", command="shuffle")
     async def _remove(self, ctx: commands.Context, index: int):
         """Removes a song from the queue at a given index."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if len(ctx.voice_state.songs) == 0:
             return await ctx.send('Empty queue.')
@@ -293,11 +273,12 @@ class MusicPlayer(Module):
         await ctx.message.add_reaction('✅')
 
     @commands.command(name='loop')
-    @decorators.can_run(module_source="music", command="shuffle")
     async def _loop(self, ctx: commands.Context):
         """Loops the currently playing song.
         Invoke this command again to unloop the song.
         """
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if not ctx.voice_state.is_playing:
             return await ctx.send('Nothing being played at the moment.')
@@ -307,11 +288,12 @@ class MusicPlayer(Module):
         await ctx.message.add_reaction('✅')
 
     @commands.command(name='queue')
-    @decorators.can_run(module_source="music", command="shuffle")
     async def _queue(self, ctx: commands.Context, *, page: int = 1):
         """Shows the player's queue.
         You can optionally specify the page to show. Each page contains 10 elements.
         """
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if len(ctx.voice_state.songs) == 0:
             return await ctx.send('Empty queue.')
@@ -331,9 +313,10 @@ class MusicPlayer(Module):
         await ctx.send(embed=embed)
 
     @commands.command(name='now', aliases=['current', 'playing'])
-    @decorators.can_run(module_source="music", command="now")
     async def _now(self, ctx: commands.Context):
         """Displays the currently playing song."""
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
 
         if ctx.voice_state or ctx.voice_state.current:
             await ctx.send("No music playing!")
@@ -342,8 +325,10 @@ class MusicPlayer(Module):
         await ctx.send(embed=ctx.voice_state.current.create_embed())
 
     @commands.command(name='tag')
-    @decorators.can_run(module_source="music", command="tag")
     async def _tag(self, ctx: commands.Context, *, terms: str):
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         urls = find_urls(terms)
         if len(urls) != 1:
             raise CommandRunError(
@@ -374,8 +359,10 @@ class MusicPlayer(Module):
         await self.manager.save_data_for_user_in_context(ctx, "music", user_songs)
 
     @commands.command(name="tag_current")
-    @decorators.can_run(module_source="music", command="tag_current")
     async def _tag_current(self, ctx: commands.Context, *, terms: str):
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         if ctx.voice_state.current is None:
             raise CommandRunError("There is no song currently playing")
 
@@ -404,8 +391,10 @@ class MusicPlayer(Module):
         await self.manager.save_data_for_user_in_context(ctx, "music", user_songs)
 
     @commands.command(name="list_tagged")
-    @decorators.can_run(module_source="music", command="list_tagged")
     async def _list_tagged(self, ctx: commands.Context):
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         # Load existing
         user_songs = await self.manager.load_data_for_user_in_context(ctx, "music")
         if user_songs is None or len(user_songs.music) == 0:
@@ -417,8 +406,10 @@ class MusicPlayer(Module):
                 await ctx.send(str(entry))
 
     @commands.command(name="forget_tag")
-    @decorators.can_run(module_source="music", command="forget_tag")
     async def _forget_tag(self, ctx: commands.Context, *, terms: str):
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         urls = find_urls(terms)
         if len(urls) != 1:
             raise CommandRunError(
@@ -458,7 +449,6 @@ class MusicPlayer(Module):
         await self.manager.save_data_for_user_in_context(ctx, "music", user_songs)
 
     @commands.command(name="add_tagged")
-    @decorators.can_run(module_source="music", command="add_tagged")
     async def _add_tagged(self, ctx: commands.Context, *, terms: str):
         """
         Add a tagged song to the current queue
@@ -467,6 +457,9 @@ class MusicPlayer(Module):
         :param terms:
         :return:
         """
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         tags = terms.split()
 
         # Load existing
@@ -493,8 +486,7 @@ class MusicPlayer(Module):
             await self._play(ctx, info=current_best.url)
 
     @commands.command(name="add")
-    @decorators.can_run(module_source="music", command="add")
-    async def _add(self, ctx: commands.Context, *, info: str, channel: discord.VoiceChannel = None):
+    async def _add(self, ctx: commands.Context, *, info: str):
         """
         Add a song to the current queue.
 
@@ -504,9 +496,11 @@ class MusicPlayer(Module):
         :param terms:
         :return:
         """
+        if not self.can_run(ctx, True):
+            return await ctx.send("You do not have sufficient privileges, or the bot is not the correct state to run this command!")
+
         if not ctx.voice_state.voice:
             await ctx.send("I am not currently sitting in a channel, please summon me or start a game first!")
-            # await self.summon_duck(ctx, channel=channel)
 
         async with ctx.typing():
 
@@ -522,16 +516,25 @@ class MusicPlayer(Module):
                 await ctx.voice_state.songs.put(song)
 
     @commands.command(name="everybody_dj")
-    @decorators.can_run(module_source="music", command="everybody_dj")
-    async def _everybody_can_jd(self):
-        self.permissions = 3
+    async def _everybody_can_dj(self, ctx):
+        if self.is_owner(ctx):
+            self.permissions = 3
+
+        else:
+            await ctx.send("Only an admin or the bot owner can use this command.")
 
     @commands.command(name="channel_dj")
-    @decorators.can_run(module_source="music", command="channel_dj")
-    async def _channel_can_dj(self):
-        self.permissions = 2
+    async def _channel_can_dj(self, ctx):
+        if self.is_owner(ctx):
+            self.permissions = 2
+
+        else:
+            await ctx.send("Only an admin or the bot owner can use this command.")
 
     @commands.command(name="owner_dj")
-    @decorators.can_run(module_source="music", command="owner_dj")
-    async def _owner_can_dj(self):
-        self.permissions = 1
+    async def _owner_can_dj(self, ctx):
+        if self.is_owner(ctx):
+            self.permissions = 1
+
+        else:
+            await ctx.send("Only an admin or the bot owner can use this command.")

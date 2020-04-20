@@ -3,8 +3,7 @@ from discord.ext import commands
 
 from module_properties import Module
 from modules.game.data import Games, GameEntry, PlayerEntry
-from utils import decorators
-from utils.permissions import CommandRunError
+from utils.errors import CommandRunError
 
 """
 TODO: This does not work if the bot is a member of multiple guilds
@@ -51,22 +50,11 @@ class GameManager(Module):
         # TODO: Store a list of adventurers
         return False
 
-    def run_permissions_check(self, ctx, module_source=None, command=None):
-        if module_source != "GameManager":
-            return True
+    def is_in_game(self, ctx):
+        if self.get_game():
+            return self.is_adventurer(ctx.author.id)
 
-        # Admins can always!
-        if ctx.author.guild_permissions.administrator:
-            return True
-
-        elif command == "add_adventurer":
-            if not self.get_game():
-                raise CommandRunError("You cannot add an adventurer if you are not running a game!")
-
-            elif self.get_game().get_gm() != ctx.author.id:
-                raise CommandRunError("You cannot add an adventurer if you are not the GM!")
-
-        return True
+        return False
 
     @commands.command(name="game")
     @commands.has_any_role("GM", "@admin")
@@ -129,7 +117,7 @@ class GameManager(Module):
         module = self.manager.get_module("MusicPlayer")
         if module is not None:
             ctx.voice_state = module.get_voice_state(ctx)
-            await module.summon_duck(ctx, channel=self.voice_channel)
+            await module._summon(ctx, channel=self.voice_channel)
 
         # Remember this game
         if not existing_game:
@@ -199,7 +187,6 @@ class GameManager(Module):
     """
 
     @commands.command(name="add_adventurer")
-    @decorators.can_run(module_source="game_module", command="add_adventurer")
     async def _add_adventurer(self, ctx: commands.Context):
         """
         1) split txt into mentions
@@ -207,14 +194,19 @@ class GameManager(Module):
         3) update channel permissions
         4) serialize to file
         """
+        if not self.is_in_game(ctx):
+            return await ctx.send("You cannot run this command as you are not in a game!")
+
         return
 
     @commands.command(name="remove_adventurer")
-    @decorators.can_run(module_source="game_module", command="remove_adventurer")
     async def _remove_adventurer(self, ctx: commands.Context):
         """
         1) split txt into mentions
         2) update channel permissions
         3) serialize to file
         """
+        if not self.is_in_game(ctx):
+            return await ctx.send("You cannot run this command as you are not in a game!")
+
         return

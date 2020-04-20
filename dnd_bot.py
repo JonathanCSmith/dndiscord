@@ -5,7 +5,7 @@ from discord.ext import commands
 from modules.inventory.inventory_module import InventoryManager
 from modules.music.music_module import MusicPlayer
 from modules.game.game_module import GameManager
-from utils import dice, permissions, data
+from utils import dice, data
 
 """
 Common func in DNDBot
@@ -41,9 +41,6 @@ class DNDBot:
     def add_module(self, module):
         self.bot.add_cog(module)
         self.modules[module.get_name()] = module
-        permissions_interested = getattr(module, "run_permissions_check", None)
-        if callable(permissions_interested):
-            permissions.add_permission_interested_module(module)
 
     def get_module(self, name):
         return self.modules[name]
