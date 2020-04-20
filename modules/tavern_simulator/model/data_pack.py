@@ -9,7 +9,7 @@ TODO: We could turn the 'values' of prerequisites into an alias repository inste
 
 
 class Data:
-    def __int__(self, name, prerequisites=None, provided=None):
+    def __int__(self, name, prerequisites=None, provides=None):
         self.name = name
 
         if prerequisites is None:
@@ -19,28 +19,28 @@ class Data:
             prerequisites = dict()
         self.prerequisites = prerequisites
 
-        if provided is None:
-            provided = dict()
-        elif not isinstance(provided, dict):
-            print("Provided: " + str(provided) + " are not valid for: " + name)
-            provided = dict()
-        self.provided = provided
+        if provides is None:
+            provides = dict()
+        elif not isinstance(provides, dict):
+            print("Provided: " + str(provides) + " are not valid for: " + name)
+            provides = dict()
+        self.provides = provides
 
     def get_prerequisites(self):
         return self.prerequisites
 
     def get_provided(self):
-        return self.provided
+        return self.provides
 
     def get_provided_value(self, keys):
         values = list()
         if isinstance(keys, list):
             for key in keys:
-                if key in self.provided:
-                    values.append(self.provided[key])
+                if key in self.provides:
+                    values.append(self.provides[key])
 
-        elif keys in self.provided:
-            values.append(self.provided[keys])
+        elif keys in self.provides:
+            values.append(self.provides[keys])
 
         return values
 
@@ -48,8 +48,8 @@ class Data:
 class Service(Data):
     maximum_services_tag = "maximum_services"
 
-    def __init__(self, name, cost, sale, prerequisites=None, provided=None, service_maximum_tags=None, served=None):
-        super().__int__(name, prerequisites=prerequisites, provided=provided)
+    def __init__(self, name, cost, sale, prerequisites=None, provides=None, service_maximum_tags=None, served=None):
+        super().__int__(name, prerequisites=prerequisites, provides=provides)
 
         self.cost = cost
         self.sale = sale
@@ -67,15 +67,15 @@ class Staff(Data):
     TODO: Names, Service type transitions (i.e. upsell)? Staff common rooms? Staff limit the volume of sales
     """
 
-    def __init__(self, name, cost, prerequisites=None, provided=None):
-        super().__int__(name, prerequisites=prerequisites, provided=provided)
+    def __init__(self, name, cost, prerequisites=None, provides=None):
+        super().__int__(name, prerequisites=prerequisites, provides=provides)
 
         self.cost = cost
 
 
-class Upgrade(Data):
+class Purchase(Data):
     def __init__(self, name, cost, provided=None, prerequisites=None):
-        super().__int__(name, provided=provided, prerequisites=prerequisites)
+        super().__int__(name, provides=provided, prerequisites=prerequisites)
 
         self.cost = cost
 
@@ -87,8 +87,8 @@ class Patron(Data):
 
     def __init__(self, name, priority, consumed, mean_patron_occupancy_additive_tag=None,
                  mean_patron_occupancy_multiplier_tag=None, maximum_patron_occupancy_limit_tag=None, prerequisites=None,
-                 provided=None):
-        super().__int__(name, prerequisites=prerequisites, provided=provided)
+                 provides=None):
+        super().__int__(name, prerequisites=prerequisites, provides=provides)
         self.name = name
         self.priority = priority
 
@@ -129,11 +129,7 @@ class DataPack:
         self.services = dict()
         self.staff = dict()
         self.patrons = dict()
-        self.upgrades = dict()
-
-    def add_tag(self, tag):
-        if isinstance(tag, Tag):
-            self.tag_library[tag.name] = tag
+        self.purchaseable = dict()
 
     def add_service(self, service):
         self.services[service.name] = service
@@ -162,30 +158,30 @@ class DataPack:
     def get_patrons(self):
         return self.patrons.values()
 
-    def add_upgrade(self, upgrade):
-        self.upgrades[upgrade.name] = upgrade
+    def add_purchaseable(self, upgrade):
+        self.purchaseable[upgrade.name] = upgrade
 
-    def get_upgrade(self, key):
-        return self.upgrades[key]
+    def get_purchaseable(self, key):
+        return self.purchaseable[key]
 
-    def get_upgrades(self):
-        return self.upgrades.values()
+    def get_purchaseables(self):
+        return self.purchaseable.values()
 
     def save(self):
         data.save(self.services, os.path.join(self.path, "services.json"))
         data.save(self.staff, os.path.join(self.path, "staff.json"))
         data.save(self.patrons, os.path.join(self.path, "patrons.json"))
-        data.save(self.upgrades, os.path.join(self.path, "upgrades.json"))
+        data.save(self.purchaseable, os.path.join(self.path, "upgrades.json"))
 
     def load(self):
         self.services = data.load(os.path.join(self.path, "services.json"))
         self.staff = data.load(os.path.join(self.path, "staff.json"))
         self.patrons = data.load(os.path.join(self.path, "patrons.json"))
-        self.upgrades = data.load(os.path.join(self.path, "upgrades.json"))
+        self.purchaseable = data.load(os.path.join(self.path, "upgrades.json"))
 
     def clear(self):
         self.patrons.clear()
-        self.upgrades.clear()
+        self.purchaseable.clear()
 
     def return_priority_order(self, elem):
         return elem.priority

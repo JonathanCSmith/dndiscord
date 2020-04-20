@@ -1,153 +1,61 @@
-import asyncio
 import functools
-import itertools
 import math
-from random import random
 
 import discord
-from async_timeout import timeout
 from discord.ext import commands
 from discord.ext.commands import MissingAnyRole
 
 from module_properties import Module
 from modules.music import data
 from modules.music.data import Music
-from modules.music.ytdl_source import YTDLSource, YTDLError
+from modules.music.music_properties.music import VoiceError, Song, VoiceState
+from modules.music.music_properties.ytdl_source import YTDLSource, YTDLError
 
 from utils import decorators
 from utils.permissions import CommandRunError
 from utils.strings import find_urls
 
+"""
+Permissions:
+    All command permissions follow the basic premise
+        1) If ADMIN then yes
+        2) If OWNER then yes
+        3) If perms_type == open then yes
+        4) if perms_type == member & if member then yes
 
-class VoiceError(Exception):
-    pass
+    except summon which follows the below:
+        1) If ADMIN then yes
+        2) If role is GM then yes
+        3) If role is DJ then yes           
 
+All commands:
+    summon - moves the bot to a channel (your's or specified)
+    kick - kicks the bot out of your channel IF you are not in a game and are the owner or admin
+    next - skips the current song (starts vote if low permission)
+    volume - sets the volume of the bot
+    pause - pauses the currently playing song
+    resume - resumes the currently playing song
+    stop_and_clear - stops the bot playing and clears the current queue
+    shuffle - shuffle's the current queue 
+    remove - removes a song at a given index 
+    loop - repeats the current song 
+    queue - shows the queue 
+    now - shows the currently playing song
+    tag - tags a url song with metadata tags
+    tag_current - tags the currently playing song with metadata tags 
+    list_tagged - list all of your currently tagged urls 
+    forget_tagged - remove a tag from a url, if all tags are removed, url is forgotten 
+    add - add a song to the queue 
+    add_tagged - add a tagged url to the queue 
+    everybody_dj - set permissions to open
+    channel_dj - set permissions to channel
+    owner_dj - set permissions to owner
 
-class Song:
-    __slots__ = ('source', 'requester')
-
-    def __init__(self, source: YTDLSource):
-        self.source = source
-        self.requester = source.requester
-
-    def create_embed(self):
-        embed = (discord.Embed(title='Now playing',
-                               description='```css\n{0.source.title}\n```'.format(self),
-                               color=discord.Color.blurple())
-                 .add_field(name='Duration', value=self.source.duration)
-                 .add_field(name='Requested by', value=self.requester.mention)
-                 .add_field(name='Uploader', value='[{0.source.uploader}]({0.source.uploader_url})'.format(self))
-                 .add_field(name='URL', value='[Click]({0.source.url})'.format(self))
-                 .set_thumbnail(url=self.source.thumbnail))
-
-        return embed
-
-
-class SongQueue(asyncio.Queue):
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            return list(itertools.islice(self._queue, item.start, item.stop, item.step))
-        else:
-            return self._queue[item]
-
-    def __iter__(self):
-        return self._queue.__iter__()
-
-    def __len__(self):
-        return self.qsize()
-
-    def clear(self):
-        self._queue.clear()
-
-    def shuffle(self):
-        random.shuffle(self._queue)
-
-    def remove(self, index: int):
-        del self._queue[index]
-
-
-class VoiceState:
-    def __init__(self, bot: commands.Bot, ctx: commands.Context):
-        self.bot = bot
-        self._ctx = ctx
-
-        self.current = None
-        self.voice = None
-        self.next = asyncio.Event()
-        self.songs = SongQueue()
-
-        self._loop = False
-        self._volume = 0.5
-        self.skip_votes = set()
-
-        self.audio_player = bot.loop.create_task(self.audio_player_task())
-
-    def __del__(self):
-        self.audio_player.cancel()
-
-    @property
-    def loop(self):
-        return self._loop
-
-    @loop.setter
-    def loop(self, value: bool):
-        self._loop = value
-
-    @property
-    def volume(self):
-        return self._volume
-
-    @volume.setter
-    def volume(self, value: float):
-        self._volume = value
-
-        if self.is_playing:
-            self.current.source.volume = value
-
-    @property
-    def is_playing(self):
-        return self.voice is not None and self.current is not None
-
-    async def audio_player_task(self):
-        while True:
-            self.next.clear()
-
-            if not self.loop:
-                # Try to get the next song within 3 minutes.
-                # If no song will be added to the queue in time,
-                # the player will disconnect due to performance
-                # reasons.
-                try:
-                    async with timeout(180):  # 3 minutes
-                        self.current = await self.songs.get()
-                except asyncio.TimeoutError:
-                    self.bot.loop.create_task(self.stop())
-                    return
-
-            self.current.source.volume = self._volume
-            self.voice.play(self.current.source, after=self.play_next_song)
-            await self.current.source.channel.send(embed=self.current.create_embed())
-
-            await self.next.wait()
-
-    def play_next_song(self, error=None):
-        if error:
-            raise VoiceError(str(error))
-
-        self.next.set()
-
-    def skip(self):
-        self.skip_votes.clear()
-
-        if self.is_playing:
-            self.voice.stop()
-
-    async def stop(self):
-        self.songs.clear()
-
-        if self.voice:
-            await self.voice.disconnect()
-            self.voice = None
+TODO: Queue and now can be opened up if we can ensure privacy, but its not worth the feature creep
+TODO: Investigate bug where bot is technically playing a tune, is removed, and then when it attempts to rejoin it cannot (delete based perhaps?) MAY BE FIXED
+TODO: Perhaps add_tagged (and equivalent) should add all songs that contain the tags provided? (i.e. they must contain all tags, but they may also have others - proposed tags must be a subset of owned tags)?
+TODO: This does not work if the bot is a member of multiple guilds
+"""
 
 
 class MusicPlayer(Module):
@@ -186,15 +94,17 @@ class MusicPlayer(Module):
 
         await ctx.send('An error occurred: {}'.format(str(error)))
 
-    def run_check(self, ctx, module_source=None, command=None):
-        super().run_check(ctx, module_source=module_source, command=command)
+    def run_permissions_check(self, ctx, module_source=None, command=None):
+        # We are not interested in these
+        if module_source != "music":
+            return True
 
         # Admins can always!
         if ctx.author.guild_permissions.administrator:
             return True
 
         # Certain roles can actually start the bot
-        elif module_source == "music" and command == "summon":
+        elif command == "summon":
             items = ["DJ", "GM"]
             getter = functools.partial(discord.utils.get, ctx.author.roles)
             if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for
@@ -203,34 +113,48 @@ class MusicPlayer(Module):
             raise MissingAnyRole(items)
 
         # Check if we are the owner for this
-        elif module_source == "music" and (command == "summon" or command == "everybody_dj" or command == "channel_dj" or command == "owner_dj"):
+        elif command == "everybody_dj" or command == "channel_dj" or command == "owner_dj":
             if len(self.bot.voice_clients) == 0:
                 raise CommandRunError("This command cannot be run without me being in a channel first!")
 
-            session_manager = self.manager.get_module("SessionManager")
-            if session_manager and session_manager.get_session():
-                if ctx.author.id != session_manager.get_gm():
-                    raise CommandRunError("A session is currently using the music bot. Please contact an admin or GM: " + session_manager.get_gm_real() + " to negotiate custody.")
+            game_manager = self.manager.get_module("GameManager")
+            if game_manager and game_manager.get_game():
+                if ctx.author.id != game_manager.get_gm():
+                    raise CommandRunError(
+                        "A game is currently using the music bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
 
             # Check for ownership
             elif self.owner != ctx.author.id:
-                raise CommandRunError("A session is currently using the music bot. Please contact an admin or GM: " + session_manager.get_gm_real() + " to negotiate custody.")
+                raise CommandRunError(
+                    "A game is currently using the musics bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
 
-        elif module_source == "music":
+        else:
 
             # Check ownership
             if self.permissions == 3:
-                session_manager = self.manager.get_module("SessionManager")
-                if session_manager and session_manager.get_session():
-                    if ctx.author.id != session_manager.get_gm():
-                        raise CommandRunError("This command cannot be run without being the session manager of the currently running session.")
+                game_manager = self.manager.get_module("GameManager")
+                if game_manager and game_manager.get_game():
+                    if ctx.author.id != game_manager.get_gm():
+                        raise CommandRunError(
+                            "This command cannot be run without being the game manager of the currently running game.")
 
                 elif self.owner != ctx.author.id:
-                    raise CommandRunError("A session is currently using the music bot. Please contact an admin or GM: " + session_manager.get_gm_real() + " to negotiate custody.")
+                    raise CommandRunError(
+                        "A game is currently using the music bot. Please contact an admin or GM: " + game_manager.get_gm_real() + " to negotiate custody.")
 
             # Check channel membership and ownership
             elif self.permissions == 2:
-                pass
+
+                # Check if the caller is an adventurer in the game
+                game_manager = self.manager.get_module("GameManager")
+                if game_manager and game_manager.get_game():
+                    if not game_manager.is_adventurer(ctx.author.it):
+                        raise CommandRunError("Only adventurers in the current session can run commands for the bot currently.")
+
+                # Otherwise ensure that the caller is currently listening in the channel
+                #TODO This will throw a fit if the bot isnt in voice
+                elif ctx.voice_state.voice and (not ctx.author.voice or ctx.author.voice.channel.name != ctx.voice_state.voice.channel.name):
+                    raise CommandRunError("You can only run this command if your are in the same channel as the bot!")
 
         return True
 
@@ -244,22 +168,26 @@ class MusicPlayer(Module):
         If no channel was specified, it joins your channel.
         """
         if len(self.bot.voice_clients) != 0:
-            await ctx.send("Sorry, I am currently in: " + self.bot.voice_clients[0].channel.name + " - Kick me if you want me to move!")
+            await ctx.send("Sorry, I am currently in: " + self.bot.voice_clients[
+                0].channel.name + " - Kick me if you want me to move!")
             return
 
         if not channel and not ctx.author.voice:
             raise VoiceError('You are neither connected to a voice channel nor specified a channel to join.')
 
+        # Set the owner
+        self.owner = ctx.author.id
+
+        # Move the bot to the channel
         destination = channel or ctx.author.voice.channel
         if ctx.voice_state.voice:
             await ctx.voice_state.voice.move_to(destination)
-            await ctx.message("I am now active in: " + destination)
+            await ctx.message("I am now active in: " + destination.name)
             return
 
         ctx.voice_state.voice = await destination.connect()
 
     @commands.command(name='kick', aliases=['leave', 'disconnect'])
-    @commands.has_permissions(manage_guild=True)
     @decorators.can_run(module_source="music", command="kick")
     async def _kick(self, ctx: commands.Context):
         """Clears the queue and leaves the voice channel."""
@@ -269,6 +197,7 @@ class MusicPlayer(Module):
 
         await ctx.voice_state.stop()
         del self.voice_states[ctx.guild.id]
+        self.owner = None
 
     @commands.command(name='next')
     @decorators.can_run(module_source="music", command="next")
@@ -402,8 +331,13 @@ class MusicPlayer(Module):
         await ctx.send(embed=embed)
 
     @commands.command(name='now', aliases=['current', 'playing'])
+    @decorators.can_run(module_source="music", command="now")
     async def _now(self, ctx: commands.Context):
         """Displays the currently playing song."""
+
+        if ctx.voice_state or ctx.voice_state.current:
+            await ctx.send("No music playing!")
+            return
 
         await ctx.send(embed=ctx.voice_state.current.create_embed())
 
@@ -412,7 +346,8 @@ class MusicPlayer(Module):
     async def _tag(self, ctx: commands.Context, *, terms: str):
         urls = find_urls(terms)
         if len(urls) != 1:
-            raise CommandRunError("The format for the music command is: !music tag1 tag2 tag3 url - the url must start with an http!")
+            raise CommandRunError(
+                "The format for the tag command is: !tag tag1 tag2 tag3 url - the url must start with an http!")
 
         # Load existing
         user_songs = await self.manager.load_data_for_user_in_context(ctx, "music")
@@ -486,7 +421,8 @@ class MusicPlayer(Module):
     async def _forget_tag(self, ctx: commands.Context, *, terms: str):
         urls = find_urls(terms)
         if len(urls) != 1:
-            raise CommandRunError("The format for the music command is: !remove url <optional tags> - the url must start with an http!")
+            raise CommandRunError(
+                "The format for the forget_tag command is: !forget_tag url <optional tags> - the url must start with an http!")
 
         # Load existing
         user_songs = await self.manager.load_data_for_user_in_context(ctx, "music")
@@ -569,8 +505,8 @@ class MusicPlayer(Module):
         :return:
         """
         if not ctx.voice_state.voice:
-            await ctx.send("I am not currently sitting in a channel, please summon me or start a session first!")
-            #await self.summon_duck(ctx, channel=channel)
+            await ctx.send("I am not currently sitting in a channel, please summon me or start a game first!")
+            # await self.summon_duck(ctx, channel=channel)
 
         async with ctx.typing():
 
@@ -599,46 +535,3 @@ class MusicPlayer(Module):
     @decorators.can_run(module_source="music", command="owner_dj")
     async def _owner_can_dj(self):
         self.permissions = 1
-
-    """
-    Go over perms as a whole & allow 'bot caller' to be a thing like GM for sessions
-    
-    Permissions:
-        All command permissions follow the basic premise
-            1) If ADMIN then yes
-            2) If OWNER then yes
-            3) If perms_type == open then yes
-            4) if perms_type == member & if member then yes
-            
-        except summon which follows the below:
-            1) If ADMIN then yes
-            2) If role is GM then yes
-            3) If role is DJ then yes           
-                
-    All commands:
-        summon - moves the bot to a channel (your's or specified)
-        kick - kicks the bot out of your channel IF you are not in a session and are the owner or admin
-        next - skips the current song (starts vote if low permission)
-        volume - sets the volume of the bot
-        pause - pauses the currently playing song
-        resume - resumes the currently playing song
-        stop_and_clear - stops the bot playing and clears the current queue
-        shuffle - shuffle's the current queue 
-        remove - removes a song at a given index 
-        loop - repeats the current song 
-        queue - shows the queue 
-        now - shows the currently playing song
-        tag - tags a url song with metadata tags
-        tag_current - tags the currently playing song with metadata tags 
-        list_tagged - list all of your currently tagged urls 
-        forget_tagged - remove a tag from a url, if all tags are removed, url is forgotten 
-        add - add a song to the queue 
-        add_tagged - add a tagged url to the queue 
-        everybody_dj - set permissions to open
-        channel_dj - set permissions to channel
-        owner_dj - set permissions to owner
-        
-    TODO: Queue and now can be opened up if we can ensure privacy, but its not worth the feature creep
-    TODO: Owner can free permissions (channel members, open)
-    TODO: Investigate bug where bot is technically playing a tune, is removed, and then when it attempts to rejoin it cannot (delete based perhaps?)
-    """

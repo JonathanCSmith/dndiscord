@@ -2,8 +2,8 @@ import os
 
 from scipy import stats
 
-from module_properties.tavern_simulator.model.data_pack import Patron, Upgrade, Staff
-from module_properties.tavern_simulator.model.outcomes import Sale
+from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff
+from modules.tavern_simulator.model.outcomes import Sale
 from utils import math, data
 
 
@@ -64,7 +64,7 @@ class Tavern:
         if not self.provides_for(purchase.get_prerequisites()):
             return
 
-        if isinstance(purchase, Upgrade):
+        if isinstance(purchase, Purchase):
             self.tavern_status.add_upgrade(purchase)
 
         elif isinstance(purchase, Staff):
@@ -101,7 +101,7 @@ class Tavern:
         # Check upgrades
         possible_upgrades = self.tavern_status.get_upgrades()
         for possible_upgrade in possible_upgrades:
-            upgrade = self.data_pack.get_upgrade(possible_upgrade)
+            upgrade = self.data_pack.get_purchaseable(possible_upgrade)
             if upgrade is not None and self.provides_for(upgrade.get_prerequisites()):
                 all_purchases.append(upgrade)
 
@@ -219,7 +219,7 @@ class Tavern:
     def determine_max_occupancy(self):
         max_occupancy_modifiers = list()
         for upgrade_key in self.tavern_status.get_upgrades():
-            upgrade = self.data_pack.get_upgrade(upgrade_key)
+            upgrade = self.data_pack.get_purchaseable(upgrade_key)
             max_occupancy_modifiers.extend(upgrade.get_provided_value(Patron.maximum_occupancy_limit_tag))
         self.set_maximum_occupancy(sum(max_occupancy_modifiers))
 
@@ -230,7 +230,7 @@ class Tavern:
 
             # Remove any things provided by our upgrades
             for upgrade_key in self.tavern_status.get_upgrades():
-                upgrade = self.data_pack.get_upgrade(upgrade_key)
+                upgrade = self.data_pack.get_purchaseable(upgrade_key)
                 provided = upgrade.get_provided()
                 remaining_requirements = remaining_requirements.difference(provided)
 
@@ -247,7 +247,7 @@ class Tavern:
                 # Check our upgrade for inhibitions
                 applicable_values = list()
                 for upgrade_key in self.tavern_status.get_upgrades():
-                    upgrade = self.data_pack.get_upgrade(upgrade_key)
+                    upgrade = self.data_pack.get_purchaseable(upgrade_key)
                     applicable_values.extend(upgrade.get_provided_value(max_modifier_tags))
 
                 if len(applicable_values) == 0:
@@ -280,7 +280,7 @@ class Tavern:
             max_occupancy_for_patron_type.append(self.get_maximum_occupancy())
             current_upgrades = self.tavern_status.get_upgrades()
             for upgrade_key in current_upgrades:
-                upgrade = self.data_pack.get_upgrade(upgrade_key)
+                upgrade = self.data_pack.get_purchaseable(upgrade_key)
 
                 applicable_values = upgrade.get_provided_value(patron_type.get_mean_patron_occupancy_additive_tag())
                 avg_occupancy.extend(applicable_values)

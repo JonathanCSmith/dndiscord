@@ -5,7 +5,7 @@ import discord
 import youtube_dl
 from discord.ext import commands
 
-from modules.music.source import Source
+from modules.music.music_properties.source import Source
 
 # song downloader setup
 # Silence useless bug reports messages

@@ -26,13 +26,13 @@ class InventoryManager(Module):
     async def _inventory(self, ctx: commands.Context, *, info: str):
         pass
 
-    def run_check(self, ctx, module_source=None, command=None):
+    def run_permissions_check(self, ctx, module_source=None, command=None):
 
         if module_source == "inventory":
 
-            # We need to be running a session for the inventory command
-            session_manager = self.manager.get_module("SessionManager")
-            if session_manager is not None and not session_manager.get_session():
-                raise CommandRunError("A session is required in order to run the inventory features.")
+            # We need to be running a game for the inventory command
+            game_manager = self.manager.get_module("GameManager")
+            if game_manager is not None and not game_manager.get_game():
+                raise CommandRunError("A game is required in order to run the inventory features.")
 
         return True

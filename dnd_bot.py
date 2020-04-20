@@ -4,7 +4,7 @@ from discord.ext import commands
 
 from modules.inventory.inventory_module import InventoryManager
 from modules.music.music_module import MusicPlayer
-from modules.session.session_module import SessionManager
+from modules.game.game_module import GameManager
 from utils import dice, permissions, data
 
 """
@@ -24,9 +24,9 @@ class DNDBot:
         self.bot = commands.Bot(command_prefix='!', description=self.description)
         self.add_basic_commands(self.bot)
 
-        # We should always enable our session manager as it manages permissions and data!
-        session_module = SessionManager(self)
-        self.add_module(session_module)
+        # We should always enable our game manager as it manages permissions and data!
+        game_module = GameManager(self)
+        self.add_module(game_module)
 
         # Check for our music bot modules
         if DNDBot.is_music_module_enabled:
@@ -41,7 +41,9 @@ class DNDBot:
     def add_module(self, module):
         self.bot.add_cog(module)
         self.modules[module.get_name()] = module
-        permissions.add_permission_interested_module(module)
+        permissions_interested = getattr(module, "run_permissions_check", None)
+        if callable(permissions_interested):
+            permissions.add_permission_interested_module(module)
 
     def get_module(self, name):
         return self.modules[name]
