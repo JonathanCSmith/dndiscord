@@ -4,11 +4,13 @@ from scipy import stats
 
 from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff
 from modules.tavern_simulator.model.outcomes import Sale
-from utils import math, data
+from utils import math
 
 
 class TavernStatus:
-    def __init__(self, tavern_purchases=None, staff=None):
+    def __init__(self, data_pack_path, tavern_purchases=None, staff=None):
+        self.data_pack_pacth = data_pack_path
+
         if tavern_purchases is None:
             tavern_purchases = list()
         if staff is None:
@@ -42,7 +44,13 @@ class TavernStatus:
 
 # Design goal: Simulate a week (tenday) for a D&D Tavern!
 class Tavern:
-    def __init__(self, tavern_status_file, data_pack):
+    @classmethod
+    async def create_tavern(cls, manager, tavern_status_file, data_pack):
+        tavern = Tavern(manager, tavern_status_file, data_pack)
+        return await tavern.load()
+
+    def __init__(self, manager, tavern_status_file, data_pack):
+        self.manager = manager
         self.tavern_status_file = tavern_status_file
         self.data_pack = data_pack
 
@@ -55,14 +63,21 @@ class Tavern:
         self.sales = list()
 
         # Force data state to serialize
-        self.load()
+        self.tavern_status = None
 
-    def provides_for(self, prerequisites):
-        # TODO: We should handle values here also
-        return len(set(prerequisites) - set(self.provided)) == 0
+    def provides_for(self, data_obj):
+        prerequisites = data_obj.get_prerequisites()
+        for key, value in prerequisites.items():
+            if key not in self.provided:
+                return False
+
+        precluded_by = data_obj.get_precluded_by()
+        for key, value in precluded_by.items():
+            if key in self.provided:
+                return False
 
     def apply_purchase(self, purchase):
-        if not self.provides_for(purchase.get_prerequisites()):
+        if not self.provides_for(purchase):
             return
 
         if isinstance(purchase, Purchase):
@@ -80,22 +95,22 @@ class Tavern:
         for i in range(0, amount):
             self.apply_purchase(staff)
 
-    def save(self):
-        data.save(self.tavern_status, self.tavern_status_file)
+    async def save(self):
+        await self.manager.save_data_at(self.tavern_status_file, self.tavern_status)
 
-    def load(self):
+    async def load(self):
         if os.path.isfile(self.tavern_status_file):
-            self.tavern_status = data.load(self.tavern_status_file)
+            self.tavern_status = await self.manager.load_data_at(self.tavern_status_file)
         else:
-            self.tavern_status = TavernStatus()
-            self.save()
+            self.tavern_status = TavernStatus(self.data_pack.get_path())
+            await self.save()
 
-        self.validate()
+        await self.validate()
 
     def clear(self):
         self.tavern_status.clear()
 
-    def validate(self):
+    async def validate(self):
         # Gather our purchases
         all_purchases = list()
 
@@ -103,14 +118,14 @@ class Tavern:
         possible_purchases = self.tavern_status.get_purchases()
         for possible_purchase in possible_purchases:
             purchase = self.data_pack.get_purchaseable(possible_purchase)
-            if purchase is not None and self.provides_for(purchase.get_prerequisites()):
+            if purchase is not None and self.provides_for(purchase):
                 all_purchases.append(purchase)
 
         # Check staff
         possible_staff = self.tavern_status.get_staff().keys()
         for possible_staff_member in possible_staff:
             staff = self.data_pack.get_staff_archetype(possible_staff_member)
-            if staff is not None and self.provides_for(staff.get_prerequisites()):
+            if staff is not None and self.provides_for(staff):
                 all_purchases.append(staff)
 
         # Clear our status
@@ -121,10 +136,9 @@ class Tavern:
         while remaining_purchases > 0:
             applied_purchases = list()
             for possible_purchase in all_purchases:
-                prerequisites = possible_purchase.get_prerequisites()
 
                 # Check if all prerequisites are met
-                if self.provides_for(prerequisites):
+                if self.provides_for(possible_purchase):
                     self.apply_purchase(possible_purchase)
                     applied_purchases.append(possible_purchase)
 
@@ -259,7 +273,7 @@ class Tavern:
 
     def determine_visiting_patron_types(self):
         for patron_type in self.data_pack.get_patrons():
-            if self.provides_for(patron_type.get_prerequisites()):
+            if self.provides_for(patron_type):
                 self.visiting_patrons.append(patron_type)
 
     def simulate_attendance(self, tenday):

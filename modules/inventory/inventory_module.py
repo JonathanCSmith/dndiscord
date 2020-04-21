@@ -6,7 +6,7 @@ from utils.errors import CommandRunError
 
 class InventoryManager(Module):
     def __init__(self, manager):
-        super().__init__("InventoryManager", manager)
+        super().__init__("inventory_manager", manager)
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, CommandRunError):
@@ -16,9 +16,9 @@ class InventoryManager(Module):
         await ctx.send('An error occurred: {}'.format(str(error)))
 
     def is_in_game(self, ctx):
-        game_manager = self.manager.get_module("GameManager")
-        if game_manager and game_manager.get_game():
-            return game_manager.is_adventurer(ctx.author.id)
+        game_master = self.manager.get_module("game_master")
+        if game_master and game_master.get_game():
+            return game_master.is_adventurer(ctx.author.id)
 
         return False
 

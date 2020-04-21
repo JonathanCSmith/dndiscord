@@ -9,7 +9,3 @@ class Module(commands.Cog):
 
     def get_name(self):
         return self.name
-
-    """
-    TODO: I wanted to put a permissions check generic here, but then the child method was never called - not sure why
-    """

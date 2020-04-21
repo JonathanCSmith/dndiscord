@@ -9,7 +9,7 @@ TODO: We could turn the 'values' of prerequisites into an alias repository inste
 
 
 class Data:
-    def __int__(self, name, prerequisites=None, provides=None, description=""):
+    def __int__(self, name, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False):
         self.name = name
 
         if prerequisites is None:
@@ -26,6 +26,13 @@ class Data:
             provides = dict()
         self.provides = provides
 
+        if precluded_by is None:
+            precluded_by = dict()
+        elif not isinstance(precluded_by, dict):
+            print("Provided: " + str(precluded_by) + " are not valid for: " + name)
+            precluded_by = dict()
+        self.precluded_by = precluded_by
+
         self.description = description
 
     def append_prerequisite(self, key, value):
@@ -39,6 +46,12 @@ class Data:
 
     def get_provided(self):
         return self.provides
+
+    def append_precluded_by(self, key, value):
+        self.precluded_by[key] = value
+
+    def get_precluded_by(self):
+        return self.precluded_by
 
     def get_provided_value(self, keys):
         values = list()
@@ -56,8 +69,8 @@ class Data:
 class Service(Data):
     maximum_services_tag = "maximum_services"
 
-    def __init__(self, name, cost, sale, prerequisites=None, provides=None, service_maximum_tags=None, served=None):
-        super().__int__(name, prerequisites=prerequisites, provides=provides)
+    def __init__(self, name, cost, sale, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False, service_maximum_tags=None, served=None):
+        super().__int__(name, prerequisites=prerequisites, provides=provides, precluded_by=precluded_by, description=description, hidden=hidden)
 
         self.cost = cost
         self.sale = sale
@@ -66,26 +79,30 @@ class Service(Data):
     def get_maximum_of_service_offered_tags(self):
         return self.service_maximum_tags
 
-    def get_served(self):
-        return self.served
-
 
 class Staff(Data):
     """
     TODO: Names, Service type transitions (i.e. upsell)? Staff common rooms? Staff limit the volume of sales
     """
 
-    def __init__(self, name, cost, prerequisites=None, provides=None):
-        super().__int__(name, prerequisites=prerequisites, provides=provides)
+    def __init__(self, name, cost, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False):
+        super().__int__(name, prerequisites=prerequisites, provides=provides, precluded_by=precluded_by, description=description, hidden=hidden)
 
         self.cost = cost
 
 
 class Purchase(Data):
-    def __init__(self, name, cost, prerequisites=None, provides=None):
-        super().__int__(name, provides=provides, prerequisites=prerequisites)
+    def __init__(self, name, cost, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False):
+        super().__int__(name, provides=provides, prerequisites=prerequisites, precluded_by=precluded_by, description=description, hidden=hidden)
 
         self.cost = cost
+
+
+class Contract(Purchase):
+    def __init__(self, name, cost, duration, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False):
+        super().__init__(name, cost, provides=provides, prerequisites=prerequisites, precluded_by=precluded_by, description=description, hidden=hidden)
+
+        self.duration = duration
 
 
 class Patron(Data):
@@ -93,10 +110,8 @@ class Patron(Data):
     mean_occupancy_multiplier_tag = "average_attendance_multiplier"
     maximum_occupancy_limit_tag = "maximum_occupancy"
 
-    def __init__(self, name, priority, consumed, mean_patron_occupancy_additive_tag=None,
-                 mean_patron_occupancy_multiplier_tag=None, maximum_patron_occupancy_limit_tag=None, prerequisites=None,
-                 provides=None):
-        super().__int__(name, prerequisites=prerequisites, provides=provides)
+    def __init__(self, name, priority, consumed, prerequisites=None, provides=None, precluded_by=None, description="", hidden=False, mean_patron_occupancy_additive_tag=None, mean_patron_occupancy_multiplier_tag=None, maximum_patron_occupancy_limit_tag=None):
+        super().__int__(name, prerequisites=prerequisites, provides=provides, precluded_by=precluded_by, description=description, hidden=hidden)
         self.name = name
         self.priority = priority
 
@@ -131,13 +146,40 @@ class Patron(Data):
         return self.consumed
 
 
+# TODO: Serialize only the keys - have separate files for the actual lists
 class DataPack:
-    def __init__(self, path):
+    def __init__(self, path, services=None, staff=None, patrons=None, purchaseable=None, contracts=None, initial=None):
         self.path = path
-        self.services = dict()
-        self.staff = dict()
-        self.patrons = dict()
-        self.purchaseable = dict()
+
+        if not services:
+            services = dict()
+        self.services = services
+
+        if not staff:
+            staff = dict()
+        self.staff = staff
+
+        if not patrons:
+            patrons = dict()
+        self.patrons = patrons
+
+        if not purchaseable:
+            purchaseable = dict()
+        self.purchaseable = purchaseable
+
+        if not contracts:
+            contracts = dict()
+        self.contracts = contracts
+
+        if not initial:
+            initial = dict()
+        self.initial = initial
+
+    def add_initial(self, obj):
+        self.initial[obj.name] = obj
+
+    def get_path(self):
+        return self.path
 
     def add_service(self, service):
         self.services[service.name] = service
@@ -166,8 +208,8 @@ class DataPack:
     def get_patrons(self):
         return self.patrons.values()
 
-    def add_purchaseable(self, upgrade):
-        self.purchaseable[upgrade.name] = upgrade
+    def add_purchaseable(self, purchaseable):
+        self.purchaseable[purchaseable.name] = purchaseable
 
     def get_purchaseable(self, key):
         return self.purchaseable[key]
@@ -175,17 +217,43 @@ class DataPack:
     def get_purchaseables(self):
         return self.purchaseable.values()
 
-    def save(self):
-        data.save(self.services, os.path.join(self.path, "services.json"))
-        data.save(self.staff, os.path.join(self.path, "staff.json"))
-        data.save(self.patrons, os.path.join(self.path, "patrons.json"))
-        data.save(self.purchaseable, os.path.join(self.path, "upgrades.json"))
+    def add_contract(self, contract):
+        self.contracts[contract.name] = contract
 
-    def load(self):
-        self.services = data.load(os.path.join(self.path, "services.json"))
-        self.staff = data.load(os.path.join(self.path, "staff.json"))
-        self.patrons = data.load(os.path.join(self.path, "patrons.json"))
-        self.purchaseable = data.load(os.path.join(self.path, "upgrades.json"))
+    def get_contracts(self):
+        return self.contracts
+
+    async def save(self, manager=None):
+        if manager:
+            await manager.save_data_at(os.path.join(self.path, "initial.json"), self.initial)
+            await manager.save_data_at(os.path.join(self.path, "services.json"), self.services)
+            await manager.save_data_at(os.path.join(self.path, "staff.json"), self.staff)
+            await manager.save_data_at(os.path.join(self.path, "patrons.json"), self.patrons)
+            await manager.save_data_at(os.path.join(self.path, "purchaseable.json"), self.purchaseable)
+            await manager.save_data_at(os.path.join(self.path, "contracts.json"), self.contracts)
+        else:
+            data.save(self.initial, os.path.join(self.path, "initial.json"))
+            data.save(self.services, os.path.join(self.path, "services.json"))
+            data.save(self.staff, os.path.join(self.path, "staff.json"))
+            data.save(self.patrons, os.path.join(self.path, "patrons.json"))
+            data.save(self.purchaseable, os.path.join(self.path, "purchaseable.json"))
+            data.save(self.contracts, os.path.join(self.path, "contracts.json"))
+
+    async def load(self, manager=None):
+        if manager:
+            self.initial = await manager.load_data_at(os.path.join(self.path, "initial.json"))
+            self.services = await manager.load_data_at(os.path.join(self.path, "services.json"))
+            self.staff = await manager.load_data_at(os.path.join(self.path, "staff.json"))
+            self.patrons = await manager.load_data_at(os.path.join(self.path, "patrons.json"))
+            self.purchaseable = await manager.load_data_at(os.path.join(self.path, "purchaseable.json"))
+            self.contracts = await manager.load_data_at(os.path.join(self.path, "contracts.json"))
+        else:
+            self.initial = data.load(os.path.join(self.path, "initial.json"))
+            self.services = data.load(os.path.join(self.path, "services.json"))
+            self.staff = data.load(os.path.join(self.path, "staff.json"))
+            self.patrons = data.load(os.path.join(self.path, "patrons.json"))
+            self.purchaseable = data.load(os.path.join(self.path, "purchaseable.json"))
+            self.contracts = data.load(os.path.join(self.path, "contracts.json"))
 
     def clear(self):
         self.patrons.clear()

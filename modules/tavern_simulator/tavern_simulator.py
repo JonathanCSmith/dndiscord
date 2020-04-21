@@ -1,6 +1,6 @@
 import sys
 
-
+from modules.tavern_simulator.data_packs import default_data_pack
 from modules.tavern_simulator.model.data_pack import DataPack, Purchase, Service, Staff, Patron
 from modules.tavern_simulator.model.tavern import Tavern
 from modules.tavern_simulator.tenday import Tenday
@@ -60,65 +60,20 @@ if testing:
     data_pack = "./data/."
 
     # Data packs
-    data_pack = DataPack(data_pack)
-    data_pack.clear()
+    data_pack = default_data_pack.create_default_data_pack(data_pack, force=True)
 
-    # TODO: Can we sufficiently define a service that we can hardcode paths & tag naming conventions?
-
-    # Prebuilt services
-    basic_drinks_key_vals = dict()
-    basic_drinks_key_vals["store_basic_drinks"] = "YES"
-    basic_drinks_key_vals["sell_basic_drinks"] = "YES"
-    basic_drinks_key_vals["serve_basic_drinks"] = "YES"
-    basic_drinks = Service("basic_drinks", 1, 2, prerequisites=basic_drinks_key_vals)
-    data_pack.add_service(basic_drinks)
-
-    # Prebuilt patrons
-    commoner_patron = Patron("commoner", 2, {basic_drinks.name: 5})
-    data_pack.add_patron(commoner_patron)
-    rough_patron = Patron("rough", 1, {basic_drinks.name: 3})
-    data_pack.add_patron(rough_patron)
-
-    # Prebuild upgrades
-    barrel_vault_key_vals = dict()
-    barrel_vault_key_vals[basic_drinks.get_maximum_of_service_offered_tags()] = 100
-    barrel_vault_key_vals["maximum_drinks"] = 50
-    barrel_vault_key_vals["store_basic_drinks"] = "YES"
-    barrel_vault = Purchase("basic_barrel_vault", 500, provides=barrel_vault_key_vals)
-    data_pack.add_purchaseable(barrel_vault)
-
-    basic_taproom_key_vals = dict()
-    basic_taproom_key_vals[commoner_patron.get_mean_patron_occupancy_additive_tag()] = 10
-    basic_taproom_key_vals[rough_patron.get_mean_patron_occupancy_additive_tag()] = 2
-    basic_taproom_key_vals[Patron.maximum_occupancy_limit_tag] = 50
-    basic_taproom_key_vals["sell_basic_drinks"] = "YES"
-    basic_taproom_key_vals["taproom"] = "YES"
-    basic_taproom = Purchase("basic_taproom", 500, provides=basic_taproom_key_vals)
-    data_pack.add_purchaseable(basic_taproom)
-
-    # Prebuilt staff
-    barstaff_prerequisite_key_vals = dict()
-    barstaff_prerequisite_key_vals["taproom"] = "YES"
-    barstaff_key_vals = dict()
-    barstaff_key_vals["maximum_patrons_served"] = 100
-    barstaff_key_vals[commoner_patron.get_mean_patron_occupancy_multiplier_tag()] = 1.1
-    barstaff_key_vals[rough_patron.get_mean_patron_occupancy_multiplier_tag()] = 1.2
-    barstaff_key_vals["modify_maintenance"] = 1.1
-    barstaff_key_vals["modify_tip_rate"] = 1.1
-    barstaff_key_vals["serve_basic_drinks"] = "YES"
-    barstaff = Staff("barstaff", 1, prerequisites=barstaff_prerequisite_key_vals, provides=barstaff_key_vals)
-    data_pack.add_staff_archetype(barstaff)
-
-    # Save & Load test
+    # Test save and load
     data_pack.save()
     data_pack.load()
 
     # Create a tavern
-    tavern = Tavern(tavern_status_file, data_pack)
+    tavern = Tavern(None, tavern_status_file, data_pack)
     tavern.clear()
-    tavern.add_upgrade(basic_taproom)
-    tavern.add_upgrade(barrel_vault)
-    tavern.hire_staff(barstaff)
+
+    # Manipulate the tavern
+    # tavern.add_upgrade(basic_taproom)
+    # tavern.add_upgrade(barrel_vault)
+    # tavern.hire_staff(barstaff)
 
     # Save & Load test
     tavern.save()

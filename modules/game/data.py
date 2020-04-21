@@ -17,6 +17,11 @@ class Games:
             if item.name == name:
                 return item
 
+        return None
+
+    def delete_game(self, game):
+        self.games.remove(game)
+
 
 class GameEntry:
     def __init__(self, name, gm, gm_real, players=None):
@@ -26,6 +31,9 @@ class GameEntry:
 
         if not players:
             players = list()
+        self.players = players
+
+    def set_players(self, players):
         self.players = players
 
     def __str__(self):
