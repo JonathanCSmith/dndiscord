@@ -1,0 +1,13 @@
+1) [DONE] Finish game master commands
+2) [DONE] Clean up bot
+3) [DONE] Run through our current module set and impl game_master_listener stuff
+4) [DONE] Run through our current modules, collate and re-evaluate local TODOs
+5) [DONE] Resting implementation
+6) Handbook implementation
+7) Game data implementation
+    (i.e. how does rest module know what to look for in inventory module
+     in order to assess whether the adventurers have enough food)
+8) Tavern interactable by players
+9) Basic tavern tests
+10) Game Channels
+11) Tavern -> business impact assessment

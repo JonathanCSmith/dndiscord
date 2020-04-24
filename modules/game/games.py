@@ -1,3 +1,13 @@
+class Adventurer:
+    def __init__(self, player_id, player_name, character_name):
+        self.player_id = player_id
+        self.player_name = player_name
+        self.character_name = character_name
+
+    def __str__(self):
+        return "Player entry for: " + self.player_name + " with character " + self.character_name
+
+
 class Game:
     def __init__(self, owning_guild, game_name, gm_id, gm_name, players=None, permissions=None):
         self.owning_guild = owning_guild
@@ -18,6 +28,9 @@ class Game:
 
     def is_gm(self, gm_id):
         return gm_id == self.gm_id
+
+    def get_players(self):
+        return self.players
 
     def is_player(self, player_id):
         return player_id in self.players

@@ -4,14 +4,25 @@ import discord
 from discord.ext import commands
 
 from module_properties import Module
-from modules.music.bard import Bard, BardError
-from modules.music.favourties import Favourites, MusicEntry
-from modules.music.music import Song
-from modules.music.sources.source import SourceError, Source
-from modules.music.sources.ytdl_source import YTDLSource
+from modules.harpers.bard import Bard, BardError
+from modules.harpers.favourties import Favourites, MusicEntry
+from modules.harpers.music import Song
+from modules.harpers.sources.source import SourceError, Source
+from modules.harpers.sources.ytdl_source import YTDLSource
 from utils import constants
 from utils.errors import CommandRunError
 from utils.strings import find_urls
+
+"""
+TODO: Queue and now can be opened up if we can ensure privacy, but its not worth the feature creep
+TODO: Investigate bug where bot is technically playing a tune, is removed, and then when it attempts to rejoin it cannot (delete based perhaps?) MAY BE FIXED
+TODO: Perhaps add_tagged (and equivalent) should add all songs that contain the tags provided? (i.e. they must contain all tags, but they may also have others - proposed tags must be a subset of owned tags)?
+TODO: Documentation on functions
+TODO: Local music
+TODO: We should have a play now option
+TODO: Playlist support
+TODO: Configurable DJ roles
+"""
 
 
 class Harpers(Module):
@@ -19,10 +30,8 @@ class Harpers(Module):
         super().__init__("harpers", manager)
 
         self.bards = dict()
-        self.game_master = self.manager.get_module("game_master_new")
-        if self.game_master:
-            self.game_master.register_game_state_listener(self)
-        else:
+        self.game_master = self.manager.get_module("game_master")
+        if not self.game_master:
             raise RuntimeError("Cannot use the tavern simulator without the Game Master module.")
 
         # Add some special roles for bard management - TODO: this should be configurable in the future
@@ -52,35 +61,19 @@ class Harpers(Module):
         bard = self.bards.get(ctx.guild.id)
         if not bard:
             bard = Bard(self.bot)
-
-            # TODO: Any data management?
-
             self.bards[ctx.guild.id] = bard
 
         return bard
-
-    #TODO:
-    async def game_created(self, ctx, game):
-        pass
-
-    async def game_started(self, ctx, game):
-        pass
-
-    async def game_ended(self, ctx, game):
-        pass
-
-    async def game_deleted(self, ctx, game):
-        pass
 
     @commands.command(name="harpers:summon")
     async def _summon(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:summon", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:summon", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         # Check if we are in a channel
@@ -101,11 +94,11 @@ class Harpers(Module):
     async def _close(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:close", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:close", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         await ctx.bard.stop()
@@ -116,11 +109,11 @@ class Harpers(Module):
     async def _volume(self, ctx: commands.Context, *, volume: int):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:volume", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:volume", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if not ctx.bard.is_playing:
@@ -132,17 +125,15 @@ class Harpers(Module):
         ctx.bard.volume = volume / 100
         return await ctx.send("`I am now playing with {}% of my effort`".format(volume))
 
-    # TODO: PLAY NOW
-
     @commands.command(name="harpers:play")
     async def _play(self, ctx: commands.Context, *, info: str):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:play", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if not ctx.bard.voice:
@@ -166,11 +157,11 @@ class Harpers(Module):
     async def _pause(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:pause", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:pause", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if ctx.bard.is_playing and ctx.bard.voice.is_playing():
@@ -181,11 +172,11 @@ class Harpers(Module):
     async def _resume(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:resume", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:resume", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         # If the bard is on break, let him resume
@@ -197,11 +188,11 @@ class Harpers(Module):
     async def _stop_and_clear(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:stop_and_clear", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:stop_and_clear", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         ctx.bard.set_list.clear()
@@ -213,16 +204,16 @@ class Harpers(Module):
     async def _next(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:next", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:next", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         # If the bard is playing we cannot move to the next song
         if not ctx.bard.is_playing:
-            return await ctx.send('`I am not playing any music right now.`')
+            return await ctx.send('`I am not playing any harpers right now.`')
 
         # Skip the song
         await ctx.message.add_reaction('⏭')
@@ -233,15 +224,15 @@ class Harpers(Module):
     async def _loop(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:loop", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:loop", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if not ctx.bard.is_playing:
-            return await ctx.send('`I am not playing any music right now.`')
+            return await ctx.send('`I am not playing any harpers right now.`')
 
         # Inverse boolean value to loop and unloop.
         ctx.bard.loop = not ctx.bard.loop
@@ -251,11 +242,11 @@ class Harpers(Module):
     async def _shuffle(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:shuffle", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:shuffle", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if len(ctx.bard.set_list) == 0:
@@ -268,11 +259,11 @@ class Harpers(Module):
     async def _remove(self, ctx: commands.Context, index: int):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:remove_song_from_setlist", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:remove_song_from_setlist", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if len(ctx.voice_state.songs) == 0:
@@ -285,11 +276,11 @@ class Harpers(Module):
     async def _queue(self, ctx: commands.Context, *, page: int = 1):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:queue", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:queue", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if len(ctx.bard.set_list) == 0:
@@ -308,19 +299,19 @@ class Harpers(Module):
         embed = (discord.Embed(description='`**{} tracks:**\n\n{}`'.format(len(ctx.bard.set_list), queue)).set_footer(text='`Viewing page {}/{}`'.format(page, pages)))
         return await ctx.send(embed=embed)
 
-    @commands.command(name='harpers:now', aliases=['current', 'playing'])
+    @commands.command(name='harpers:now')
     async def _now(self, ctx: commands.Context):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:now", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:now", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         if ctx.bard or ctx.bard.current:
-            return await ctx.send("`No music playing!`")
+            return await ctx.send("`No harpers playing!`")
 
         return await ctx.send(embed=ctx.bard.current.create_embed())
 
@@ -328,11 +319,11 @@ class Harpers(Module):
     async def _play_favourite(self, ctx: commands.Context, *, terms: str):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
-            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.owner_or_role):
+            if not await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:play:favourite", permissions_level=constants.owner_or_role):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         else:
-            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", special_roles=[self.bard_roles]):
+            if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play:favourite", special_roles=[self.bard_roles]):
                 return await ctx.send("`You do not have permission to run that command.`")
 
         tags = terms.split()
@@ -359,7 +350,7 @@ class Harpers(Module):
 
         # Add the song to general player
         if current_best is not None:
-            await ctx.send("`Hmmm, that song sounds like: " +  current_best.url + ".`")
+            await ctx.send("`Hmmm, that song sounds like: " + current_best.url + ".`")
             return await self._play(ctx, info=current_best.url)
 
         else:
@@ -367,7 +358,7 @@ class Harpers(Module):
 
     @commands.command(name="harpers:favourite")
     async def _remember_favourite(self, ctx: commands.Context, *, terms: str):
-        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.open):
+        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:favourite", permissions_level=constants.open):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Search the terms for a url
@@ -411,7 +402,7 @@ class Harpers(Module):
 
     @commands.command(name="harpers:forget:favourite")
     async def _forget_favourites(self, ctx: commands.Context, *, terms: str):
-        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.open):
+        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:forget:favourite", permissions_level=constants.open):
             return await ctx.send("`You do not have permission to run that command.`")
 
         urls = find_urls(terms)
@@ -419,7 +410,7 @@ class Harpers(Module):
             return await ctx.send("`You did not provide me with the song that you wish me to forget your preferences for!`")
 
         # Load existing
-        user_songs = await self.manager.load_data_for_user_in_context(ctx, "music")
+        user_songs = await self.manager.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
         if user_songs is None or len(user_songs.music) == 0:
             return await ctx.send("`I have no recorded preferences for any songs for you...`")
 
@@ -453,7 +444,7 @@ class Harpers(Module):
 
     @commands.command(name="harpers:favourites")
     async def _list_favourites(self, ctx: commands.Context):
-        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:harper:summon", permissions_level=constants.open):
+        if not await self.game_master.check_guild_permissions_for_user(ctx, "harpers:favourites", permissions_level=constants.open):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Load existing
@@ -493,6 +484,3 @@ class Harpers(Module):
     #
     #     else:
     #         return await ctx.send("Only an admin or the bot owner can use this command.")
-
-
-

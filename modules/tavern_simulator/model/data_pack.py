@@ -291,23 +291,6 @@ class DataPack:
             data.save(self.purchaseable, os.path.join(self.path_modifier, self.name, "purchaseable.json"))
             data.save(self.contracts, os.path.join(self.path_modifier, self.name, "contracts.json"))
 
-    @DeprecationWarning
-    async def load(self, manager=None):
-        if manager:
-            self.initial = await manager.load_data_at(os.path.join(self.name, "initial.json"))
-            self.services = await manager.load_data_at(os.path.join(self.name, "services.json"))
-            self.staff = await manager.load_data_at(os.path.join(self.name, "staff.json"))
-            self.patrons = await manager.load_data_at(os.path.join(self.name, "patrons.json"))
-            self.purchaseable = await manager.load_data_at(os.path.join(self.name, "purchaseable.json"))
-            self.contracts = await manager.load_data_at(os.path.join(self.name, "contracts.json"))
-        else:
-            self.initial = data.load(os.path.join(self.name, "initial.json"))
-            self.services = data.load(os.path.join(self.name, "services.json"))
-            self.staff = data.load(os.path.join(self.name, "staff.json"))
-            self.patrons = data.load(os.path.join(self.name, "patrons.json"))
-            self.purchaseable = data.load(os.path.join(self.name, "purchaseable.json"))
-            self.contracts = data.load(os.path.join(self.name, "contracts.json"))
-
     def clear(self):
         self.patrons.clear()
         self.purchaseable.clear()

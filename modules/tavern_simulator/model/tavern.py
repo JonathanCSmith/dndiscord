@@ -65,7 +65,10 @@ class Tavern:
 
         # If its empty the new tavern would have created a tavern state, so we should save it to disk
         if not tavern_status:
-            await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
+            if game_master:
+                await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
+            else:
+                raise RuntimeError("You haven't implemented this yet")
 
         return tavern_status
 

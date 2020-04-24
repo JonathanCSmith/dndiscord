@@ -6,24 +6,11 @@ from module_properties import Module
 from modules.game.game_state_listener import GameStateListener
 from modules.inventory.inventory import Inventory
 from utils import constants
+from utils.currency import CurrencyError
 from utils.errors import CommandRunError
 
 """
-Three invs:
-    Personal - ACCESSED THROUGH DIFFERENT COMMANDS
-    Guild
-    Game
-    
-Need validators for checking what state we are in etc
-
-    Logic:
-        Am I in a game? Return that.
-        Else return guild inv.
-
-
-1) An inventory file needs to be made
-
-TODO: Inventories can grow over time theoretically, we should unload them after some time
+TODO: Personal Inventory Support
 """
 
 
@@ -31,7 +18,7 @@ class InventoryManager(Module, GameStateListener):
     def __init__(self, manager):
         super().__init__("inventory_manager", manager)
         self.inventories = dict()
-        self.game_master = self.manager.get_module("game_master_new")
+        self.game_master = self.manager.get_module("game_master")
         if self.game_master:
             self.game_master.register_game_state_listener(self)
         else:
@@ -55,11 +42,11 @@ class InventoryManager(Module, GameStateListener):
 
     async def can_access(self, ctx: commands.Context, minimum_required_permissions=constants.admin):
         # Get our party permissions
-        game_master = self.manager.get_module("game_master_new")
+        game_master = self.manager.get_module("game_master")
         if not game_master.is_game_running_for_context(ctx):
             return False
 
-        return await game_master.check_active_game_permissions_for_user(ctx, "inventory:inventory", permissions_level=constants.owner_or_role)
+        return await game_master.check_active_game_permissions_for_user(ctx, "inventory", permissions_level=constants.owner_or_role)
 
     async def get_inventory(self, ctx: commands.Context, game=None):
         # Validate that we have permissions to access this
@@ -171,10 +158,14 @@ class InventoryManager(Module, GameStateListener):
             return await ctx.send("`In the current iteration of your inventory goblin it's required that you provide three arguments to stash. Item name and amount!`")
 
         # Check if our inventory has the items and the correct amount
-        if await ctx.inventory.remove(args[0], int(args[1])):
-            return await ctx.send("`Removed: " + args[1] + " " + args[0] + "`")
-        else:
-            return await ctx.send("`I cannot remove the requested items as either it is not in your stash or there is not enough!`")
+        try:
+            if await ctx.inventory.remove(args[0], int(args[1])):
+                return await ctx.send("`Removed: " + args[1] + " " + args[0] + "`")
+            else:
+                return await ctx.send("`I cannot remove the requested items as either it is not in your stash or there is not enough!`")
+
+        except CurrencyError:
+            return await ctx.send("`You currently do not have enough money to do what you are trying to do!`")
 
     @commands.command(name="inventory:permissions")
     async def _inventory_permissions(self, ctx: commands.Context, *, type: int):

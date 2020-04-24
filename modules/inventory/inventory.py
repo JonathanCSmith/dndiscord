@@ -1,3 +1,6 @@
+import utils.currency as currency_handler
+
+
 class Inventory:
     def __init__(self, id, items=None):
         self.id = id
@@ -5,6 +8,8 @@ class Inventory:
         if items is None:
             items = list()
         self.items = items
+
+        self.currency = {"gold_pieces": 0, "silver_pieces": 0, "copper_pieces": 0}
 
     def __iter__(self):
         return self.items.__iter__()
@@ -32,6 +37,9 @@ class Inventory:
         return weight
 
     async def remove(self, obj, amount):
+        if obj in self.currency:
+            return self.remove_currency(obj, amount)
+
         item_to_remove = None
         for item in self.items:
             if obj == item.obj:
@@ -49,6 +57,13 @@ class Inventory:
             return True
 
         return False
+
+    def remove_currency(self, obj, amount):
+        if self.currency[obj] >= amount:
+            self.currency -= amount
+
+        else:
+            self.currency = currency_handler.subtract(self.currency.copy(), obj, amount)
 
 
 class InventoryEntry:

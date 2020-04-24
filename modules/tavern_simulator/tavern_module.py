@@ -55,7 +55,7 @@ class TavernSimulator(Module):
         super().__init__("tavern_simulator", manager)
 
         self.taverns = dict()
-        self.game_master = self.manager.get_module("game_master_new")
+        self.game_master = self.manager.get_module("game_master")
         if self.game_master:
             self.game_master.register_game_state_listener(self)
         else:
@@ -114,7 +114,7 @@ class TavernSimulator(Module):
             return ctx.send("`A game must be running in order to interact with the tavern.`")
 
         # Can this user initiate the call to this command
-        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern_simulator:tavern:initialize", special_roles=constants.owner_or_role):
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", special_roles=constants.owner_or_role):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Check if we have a tavern here!

@@ -11,10 +11,3 @@ class Module(commands.Cog):
 
     def get_name(self):
         return self.name
-
-    async def get_module_data(self, ctx, id):
-        module_data = await self.manager.get_guild_data_for_module_from_bot_data_store(ctx, self.name)
-        if not module_data or id not in module_data:
-            return constants.admin
-        else:
-            return module_data[id]

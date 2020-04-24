@@ -3,7 +3,7 @@ import asyncio
 from async_timeout import timeout
 from discord.ext import commands
 
-from modules.music.music import SongRequests
+from modules.harpers.music import SongRequests
 
 
 class BardError(Exception):

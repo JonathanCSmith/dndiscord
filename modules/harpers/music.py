@@ -6,7 +6,7 @@ import discord
 from async_timeout import timeout
 from discord.ext import commands
 
-from modules.music.sources.ytdl_source import YTDLSource
+from modules.harpers.sources.ytdl_source import YTDLSource
 
 
 class VoiceError(Exception):

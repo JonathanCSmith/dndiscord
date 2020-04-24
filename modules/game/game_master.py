@@ -3,21 +3,75 @@ import os
 from discord.ext import commands
 
 from module_properties import Module
-from modules.game.games import GuildData, Game
+from modules.game.games import GuildData, Game, Adventurer
 from utils import constants
 from utils.errors import CommandRunError
+
+
+"""
+TODO: Add configuration for game role management
+TODO: Game channels
+
+# Channel creation
+    # Permissions
+    admin_role = discord.utils.get(ctx.guild.roles, name="@admin")
+    me_member = ctx.author
+    bot_member = self.manager.get_bot_member(ctx)
+
+    # Create our game channel
+    name = "[DNDiscord] " + self.game
+
+    # Don't create the text channel if it already exists
+    text_channel_name = "dndiscord-" + self.game.lower().replace(" ", "-")
+    exists = False
+    for channel in ctx.guild.text_channels:
+        if channel.name == text_channel_name:
+            self.text_channel = channel
+            exists = True
+            break
+
+    if not exists:
+        self.text_channel = await ctx.guild.create_text_channel(name, overwrites={ctx.guild.default_role: constants.closed, me_member: constants.open, bot_member: constants.open, admin_role: constants.open}, userlimit=0, category=ctx.guild.categories[0])
+
+    # Create the voice channel
+    # TODO: Move this to harpers module
+    self.voice_channel = await ctx.guild.create_voice_channel(name, overwrites={ctx.guild.default_role: constants.closed, me_member: constants.open, bot_member: constants.open, admin_role: constants.open}, bitrate=64000, userlimit=0, permissions_synced=True, category=ctx.guild.categories[1])
+    if ctx.author.voice:
+        self.original_channel = ctx.author.voice.channel
+        await ctx.author.move_to(self.voice_channel)
+        await ctx.send("You are now active in: " + self.voice_channel.name)
+
+    # Channel permissions adjustment for added adventurers
+        await self.text_channel.set_permissions(player, overwrite=GameMaster.member_permissions)
+        if self.voice_channel:
+            await self.voice_channel.set_permissions(player, overwrite=GameMaster.member_permissions)    
+    
+    # Handle the channel permissions adjustment for removed players
+        await self.text_channel.set_permissions(player, overwrite=None)
+        if self.voice_channel:
+            await self.voice_channel.set_permissions(player, overwrite=None)
+TODO: Why do I need to convert guild.id to str when saving some things?
+TODO: Don't delete channels that don't exist any more
+TODO: Fix permissions on channels with a command
+TODO: If music mod enabled put some default music on start!
+TODO: Readd bot to game command
+TODO: If the voice channel exists already handle gracefully
+TODO: Delete game with no name should delete the current game
+TODO: Delete even if you don't have a voice connection?
+TODO: Documentation
+"""
 
 
 class GameMaster(Module):
 
     def __init__(self, manager):
-        super().__init__("game_master_new", manager)
+        super().__init__("game_master", manager)
 
         self.guild_data = dict()
         self.active_sessions = dict()
         self.game_state_listeners = list()
 
-        # Add some special roles for game management - TODO: this should be configurable in the future
+        # Add some special roles for game management
         self.gm_roles = ["GM"]
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
@@ -34,6 +88,11 @@ class GameMaster(Module):
         return ctx.guild.id in self.active_sessions
 
     async def check_inactive_game_permissions_for_user(self, ctx, game_name, permission_name, permissions_level=constants.admin, special_roles=None):
+        # Get the requested game
+        game = await self.__get_game(ctx, game_name)
+        if not game:
+            return False
+
         # If the user is an administrator we ALWAYS allow
         if ctx.author.guild_permissions.administrator:
             return True
@@ -43,11 +102,6 @@ class GameMaster(Module):
             special_roles = list()
         elif not isinstance(special_roles, list):
             special_roles = [special_roles]
-
-        # Get the requested game
-        game = await self.__get_game(ctx, game_name)
-        if not game:
-            return False
 
         # Get game permission overrides
         overwritten_permissions_level = game.get_permission_level(permission_name)
@@ -80,6 +134,11 @@ class GameMaster(Module):
         return False
 
     async def check_active_game_permissions_for_user(self, ctx, permission_name, permissions_level=constants.admin, special_roles=None):
+        # Get the active game
+        game = self.get_active_game_for_context(ctx)
+        if not game:
+            return False
+
         # If the user is an administrator we ALWAYS allow
         if ctx.author.guild_permissions.administrator:
             return True
@@ -89,11 +148,6 @@ class GameMaster(Module):
             special_roles = list()
         elif not isinstance(special_roles, list):
             special_roles = [special_roles]
-
-        # Get the active game
-        game = self.get_active_game_for_context(ctx)
-        if not game:
-            return False
 
         # Get game permission overrides
         overwritten_permissions_level = game.get_permission_level(permission_name)
@@ -241,7 +295,7 @@ class GameMaster(Module):
         :return:
         """
         # Can this user initiate the call to this command
-        if not await self.check_guild_permissions_for_user(ctx, "game_master:game:register", special_roles=self.gm_roles):
+        if not await self.check_guild_permissions_for_user(ctx, "game_master:register", special_roles=self.gm_roles):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Check if there is already a game with the provided name available for this context
@@ -265,7 +319,7 @@ class GameMaster(Module):
     @commands.command(name="game:run")
     async def _run_game(self, ctx: commands.Context, *, game_name: str):
         # Can this user initiate the call to this command
-        if not await self.check_inactive_game_permissions_for_user(ctx, game_name, "game_master:game:run", permissions_level=constants.owner_or_role):
+        if not await self.check_inactive_game_permissions_for_user(ctx, game_name, "game_master:run", permissions_level=constants.owner_or_role):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Is there a game running for this guild
@@ -295,7 +349,7 @@ class GameMaster(Module):
     @commands.command(name="game:end")
     async def _end_game(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:game:end", permissions_level=constants.owner_or_role):
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:end", permissions_level=constants.owner_or_role):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Is there game currently running
@@ -316,7 +370,7 @@ class GameMaster(Module):
     @commands.command(name="game:delete")
     async def _delete_game(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:game:delete", permissions_level=constants.owner_or_role):
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:delete", permissions_level=constants.owner_or_role):
             return await ctx.send("`You do not have permissions to run that command.`")
 
         # Is there game currently running
@@ -333,10 +387,70 @@ class GameMaster(Module):
 
         return await ctx.send("`Deleted: " + game.game_name + " and all of it's data.`")
 
+    @commands.command(name="game:list")
+    async def _list_games(self, ctx: commands.Context):
+        guild_data = await self.__get_guild_data(ctx)
+        await ctx.send("`You are currently involved in the following games:`")
+        async with ctx.typing():
+            for game in guild_data.games:
+                if await self.check_inactive_game_permissions_for_user(ctx, game.get_name(), "game_master:game:list", permissions_level=constants.party_member):
+                    await ctx.send("`" + game.get_name() + "`")
 
+    @commands.command(name="game:add_adventurer")
+    async def _add_adventurer(self, ctx: commands.Context, *, context: str):
+        # Can the user initiate a call to this command
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:add_adventurer", permissions_level=constants.owner_or_role):
+            return await ctx.send("`You do not have permission to run that command`")
 
-    """
-    TODO: Create game channel
-    """
+        # If no identifiable adventurers were mentioned
+        if not ctx.message.mentions:
+            return await ctx.send("`No potential adventurers were mentioned.`")
 
+        # If more than one adventurer was mentioned
+        if len(ctx.message.mentions) != 1:
+            return await ctx.send("`You can only recruit one adventurer at a time`")
 
+        # Check if the player is already a member
+        game = self.get_active_game_for_context(ctx)
+        player = ctx.message.mentions[0]
+        if game.is_player(player.id):
+            return await ctx.send("`This adventurer already is a member of your party.`")
+
+        # Create a player entry
+        adventurer_name = context.replace(player.mention.replace("<@", "<@!") + " ", "")
+        player_entry = Adventurer(player.id, player.name, adventurer_name)
+
+        # Append our player entry and save the guild data
+        game.add_player(player_entry)
+        await self.__save_guild_data(ctx, await self.__get_guild_data(ctx))
+
+        return await ctx.send("`Added the adventurer: " + adventurer_name + " to the party.`")
+
+    @commands.command(name="game:remove_adventurer")
+    async def _remove_adventurer(self, ctx: commands.Context):
+        # Can the user initiate a call to this command
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.owner_or_role):
+            return await ctx.send("`You do not have permission to run that command`")
+
+        # If no identifiable adventurers were mentioned
+        if not ctx.message.mentions:
+            return await ctx.send("`No potential adventurers were mentioned.`")
+
+        # If more than one adventurer was mentioned
+        if len(ctx.message.mentions) != 1:
+            return await ctx.send("`You can only recruit one adventurer at a time`")
+
+        # Check if the player is already a member
+        game = self.get_active_game_for_context(ctx)
+        player = ctx.message.mentions[0]
+        adventurer = game.get_player(player.id)
+
+        # Handle if they are not
+        if adventurer is None:
+            return await ctx.send("`This adventurer is not in your party.`")
+
+        # Remove and update
+        game.remove_player(player.id)
+        await self.__save_guild_data(ctx, await self.__get_guild_data(ctx))
+
+        return await ctx.send("`Removed the adventurer: " + adventurer.character_name + " from the party.`")

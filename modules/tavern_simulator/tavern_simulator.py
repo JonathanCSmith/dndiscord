@@ -56,18 +56,17 @@ if testing:
     # Put the params back
     roll = ""
     situational_modifiers = ""
-    tavern_status_file = "../../tavern.json"
-    data_pack = "./data/."
+    data_pack_path = "./data/."
 
     # Data packs
-    data_pack = default_data_pack.create_default_data_pack(data_pack, force=True)
+    data_pack = default_data_pack.create_default_data_pack(data_pack_path)
 
     # Test save and load
     data_pack.save()
-    data_pack.load()
+    data_pack = await DataPack.load(None, None, data_pack_path, "default_data_pack")
 
     # Create a tavern
-    tavern = Tavern(None, tavern_status_file, data_pack)
+    tavern = await Tavern.load_tavern(None, None, None, data_pack_path, data_pack)
     tavern.clear()
 
     # Manipulate the tavern
@@ -77,7 +76,7 @@ if testing:
 
     # Save & Load test
     tavern.save()
-    tavern.load()
+    tavern = await Tavern.load_tavern(None, None, None, data_pack_path, data_pack)
 
     # Create a tenday!
     tenday = Tenday(roll, situational_modifiers)

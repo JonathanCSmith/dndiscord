@@ -5,7 +5,7 @@ from discord.ext import commands
 
 from modules.inventory.inventory_module import InventoryManager
 from modules.game.game_master import GameMaster
-from modules.music.harpers_module import Harpers
+from modules.harpers.harpers_module import Harpers
 from modules.tavern_simulator.tavern_module import TavernSimulator
 from utils import dice, data
 
@@ -60,7 +60,7 @@ class DNDiscordBot:
         game_module_new = GameMaster(self)
         self.add_module(game_module_new)
 
-        # Check for our music bot modules
+        # Check for our harpers bot modules
         if DNDiscordBot.is_music_module_enabled:
             music_module = Harpers(self)
             self.add_module(music_module)
@@ -93,21 +93,6 @@ class DNDiscordBot:
 
     def get_bot(self):
         return self.bot
-
-    async def get_guild_data_for_module_from_bot_data_store(self, ctx, module_name):
-        if not self.data_store:
-            self.data_store = await self._load_data_from_complete_folder_path(self.data_path, "dndiscord_data.json")
-
-        if not self.data_store:
-            self.data_store = DNDiscordDataStore()
-            await self._save_data_in_complete_folder_path(self.data_path, "dndiscord_data.json", self.data_store)
-
-        return self.data_store.get_module_entry(str(ctx.guild.id), module_name)
-
-    async def set_guild_data_for_module_in_bot_data_store(self, ctx, module_name, value):
-        await self.get_guild_data_for_module_from_bot_data_store(ctx, module_name)
-        self.data_store.set_module_entry(str(ctx.guild.id), module_name, value)
-        return await self._save_data_in_complete_folder_path(self.data_path, "dndiscord_data.json", self.data_store)
 
     def get_bot_member(self, ctx):
         return ctx.guild.get_member(ctx.bot.user.id)
@@ -163,65 +148,12 @@ class DNDiscordBot:
         data.save(item_to_save, file)
 
     async def delete_in_data_path_for_guild(self, ctx, path_modifier):
-        await self.delete(os.path.join(self._get_guild_folder_path(ctx), path_modifier))
+        await self.__delete(os.path.join(self._get_guild_folder_path(ctx), path_modifier))
 
-    async def delete(self, path):
+    async def __delete(self, path):
         path = os.path.join(self.data_path, path)
         if os.path.exists(path):
             shutil.rmtree(path)
-
-    @DeprecationWarning
-    async def save_data_for_user_in_context(self, ctx, data_name, data):
-        path = "user_data" + os.path.sep + str(ctx.author.id)
-        await self.save_data(path, data_name, data)
-
-    async def save_data_at(self, file, item):
-        path = os.path.join(self.data_path, file)
-        dir = os.path.dirname(path)
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
-
-        data.save(item, path)
-
-    @DeprecationWarning
-    async def save_data(self, module_information, data_name, item_to_save):
-        path = os.path.join(self.data_path, module_information)
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        if not data_name.endswith(".json"):
-            data_name = data_name + ".json"
-
-        file_path = os.path.join(path, data_name)
-        data.save(item_to_save, file_path)
-
-    @DeprecationWarning
-    async def load_data_for_user_in_context(self, ctx, data_name):
-        path = "user_data" + os.path.sep + str(ctx.author.id)
-        return await self.load_data(path, data_name)
-
-    @DeprecationWarning
-    async def load_data_at(self, file):
-        file = os.path.join(self.data_path, file)
-        if not os.path.isfile(file):
-            return None
-
-        return data.load(file)
-
-    @DeprecationWarning
-    async def load_data(self, module_information, data_name):
-        path = os.path.join(self.data_path, module_information)
-        if not os.path.exists(path):
-            return None
-
-        if not data_name.endswith(".json"):
-            data_name = data_name + ".json"
-
-        file_path = os.path.join(path, data_name)
-        if not os.path.isfile(file_path):
-            return None
-
-        return data.load(file_path)
 
     async def create(self, path):
         path = os.path.join(self.data_path, path)
