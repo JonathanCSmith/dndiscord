@@ -5,14 +5,14 @@ import discord
 import youtube_dl
 from discord.ext import commands
 
-from modules.music.music_properties.source import Source
+from modules.music.sources.source import Source, SourceError
 
 # song downloader setup
 # Silence useless bug reports messages
 youtube_dl.utils.bug_reports_message = lambda: ''
 
 
-class YTDLError(Exception):
+class YTDLError(SourceError):
     pass
 
 

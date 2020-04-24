@@ -4,7 +4,7 @@ from modules.tavern_simulator.model.data_pack import DataPack, Purchase, Contrac
 
 
 def create_default_data_pack(path):
-    data_pack = DataPack(os.path.join(path, "default_data_pack"))
+    data_pack = DataPack("default_data_pack", path, False)
 
     # Default data
     data_pack = add_initial_tavern_state(data_pack)

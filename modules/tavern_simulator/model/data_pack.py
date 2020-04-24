@@ -148,8 +148,47 @@ class Patron(Data):
 
 # TODO: Serialize only the keys - have separate files for the actual lists
 class DataPack:
-    def __init__(self, path, services=None, staff=None, patrons=None, purchaseable=None, contracts=None, initial=None):
-        self.path = path
+    @classmethod
+    async def load_data_pack(cls, manager, ctx, original_path_modifier, pack_name):
+        path_modifier = os.path.join(original_path_modifier, pack_name)
+        if manager and ctx:
+            is_guild = True
+            initial = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "initial.json")
+            services = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "services.json")
+            staff = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "staff.json")
+            patrons = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "patrons.json")
+            purchaseable = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "purchaseable.json")
+            contracts = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "contracts.json")
+
+            # Try our backup
+            if not services or not staff or not patrons or not purchaseable:
+                is_guild = False
+                initial = await manager.load_data_from_data_path(path_modifier, "initial.json")
+                services = await manager.load_data_from_data_path(path_modifier, "services.json")
+                staff = await manager.load_data_from_data_path(path_modifier, "staff.json")
+                patrons = await manager.load_data_from_data_path(path_modifier, "patrons.json")
+                purchaseable = await manager.load_data_from_data_path(path_modifier, "purchaseable.json")
+                contracts = await manager.load_data_from_data_path(path_modifier, "contracts.json")
+
+        else:
+            is_guild = False
+            initial = data.load(os.path.join(path_modifier, "initial.json"))
+            services = data.load(os.path.join(path_modifier, "services.json"))
+            staff = data.load(os.path.join(path_modifier, "staff.json"))
+            patrons = data.load(os.path.join(path_modifier, "patrons.json"))
+            purchaseable = data.load(os.path.join(path_modifier, "purchaseable.json"))
+            contracts = data.load(os.path.join(path_modifier, "contracts.json"))
+
+        # Output nothing
+        if not services or not staff or not patrons or not purchaseable:
+            return None
+
+        return DataPack(pack_name, original_path_modifier, is_guild, initial=initial, services=services, staff=staff, patrons=patrons, purchaseable=purchaseable, contracts=contracts)
+
+    def __init__(self, name, path_modifier, is_guild, initial=None, services=None, staff=None, patrons=None, purchaseable=None, contracts=None):
+        self.name = name
+        self.path_modifier = path_modifier
+        self.is_guild = is_guild
 
         if not services:
             services = dict()
@@ -175,11 +214,14 @@ class DataPack:
             initial = dict()
         self.initial = initial
 
-    def add_initial(self, obj):
-        self.initial[obj.name] = obj
+    def get_name(self):
+        return self.name
 
     def get_path(self):
-        return self.path
+        return self.path_modifier
+
+    def add_initial(self, obj):
+        self.initial[obj.name] = obj
 
     def add_service(self, service):
         self.services[service.name] = service
@@ -223,37 +265,48 @@ class DataPack:
     def get_contracts(self):
         return self.contracts
 
-    async def save(self, manager=None):
-        if manager:
-            await manager.save_data_at(os.path.join(self.path, "initial.json"), self.initial)
-            await manager.save_data_at(os.path.join(self.path, "services.json"), self.services)
-            await manager.save_data_at(os.path.join(self.path, "staff.json"), self.staff)
-            await manager.save_data_at(os.path.join(self.path, "patrons.json"), self.patrons)
-            await manager.save_data_at(os.path.join(self.path, "purchaseable.json"), self.purchaseable)
-            await manager.save_data_at(os.path.join(self.path, "contracts.json"), self.contracts)
-        else:
-            data.save(self.initial, os.path.join(self.path, "initial.json"))
-            data.save(self.services, os.path.join(self.path, "services.json"))
-            data.save(self.staff, os.path.join(self.path, "staff.json"))
-            data.save(self.patrons, os.path.join(self.path, "patrons.json"))
-            data.save(self.purchaseable, os.path.join(self.path, "purchaseable.json"))
-            data.save(self.contracts, os.path.join(self.path, "contracts.json"))
+    async def save(self, manager=None, ctx=None):
+        save_path = os.path.join(self.path_modifier, self.name)
+        if manager and ctx:
+            if self.is_guild:
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "initial.json", self.initial)
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "services.json", self.services)
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "staff.json", self.staff)
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "patrons.json", self.patrons)
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "purchaseable.json", self.purchaseable)
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "contracts.json", self.contracts)
+            else:
+                await manager.save_data_in_data_path(save_path, "initial.json", self.initial)
+                await manager.save_data_in_data_path(save_path, "services.json", self.services)
+                await manager.save_data_in_data_path(save_path, "staff.json", self.staff)
+                await manager.save_data_in_data_path(save_path, "patrons.json", self.patrons)
+                await manager.save_data_in_data_path(save_path, "purchaseable.json", self.purchaseable)
+                await manager.save_data_in_data_path(save_path, "contracts.json", self.contracts)
 
+        else:
+            data.save(self.initial, os.path.join(self.path_modifier, self.name, "initial.json"))
+            data.save(self.services, os.path.join(self.path_modifier, self.name, "services.json"))
+            data.save(self.staff, os.path.join(self.path_modifier, self.name, "staff.json"))
+            data.save(self.patrons, os.path.join(self.path_modifier, self.name, "patrons.json"))
+            data.save(self.purchaseable, os.path.join(self.path_modifier, self.name, "purchaseable.json"))
+            data.save(self.contracts, os.path.join(self.path_modifier, self.name, "contracts.json"))
+
+    @DeprecationWarning
     async def load(self, manager=None):
         if manager:
-            self.initial = await manager.load_data_at(os.path.join(self.path, "initial.json"))
-            self.services = await manager.load_data_at(os.path.join(self.path, "services.json"))
-            self.staff = await manager.load_data_at(os.path.join(self.path, "staff.json"))
-            self.patrons = await manager.load_data_at(os.path.join(self.path, "patrons.json"))
-            self.purchaseable = await manager.load_data_at(os.path.join(self.path, "purchaseable.json"))
-            self.contracts = await manager.load_data_at(os.path.join(self.path, "contracts.json"))
+            self.initial = await manager.load_data_at(os.path.join(self.name, "initial.json"))
+            self.services = await manager.load_data_at(os.path.join(self.name, "services.json"))
+            self.staff = await manager.load_data_at(os.path.join(self.name, "staff.json"))
+            self.patrons = await manager.load_data_at(os.path.join(self.name, "patrons.json"))
+            self.purchaseable = await manager.load_data_at(os.path.join(self.name, "purchaseable.json"))
+            self.contracts = await manager.load_data_at(os.path.join(self.name, "contracts.json"))
         else:
-            self.initial = data.load(os.path.join(self.path, "initial.json"))
-            self.services = data.load(os.path.join(self.path, "services.json"))
-            self.staff = data.load(os.path.join(self.path, "staff.json"))
-            self.patrons = data.load(os.path.join(self.path, "patrons.json"))
-            self.purchaseable = data.load(os.path.join(self.path, "purchaseable.json"))
-            self.contracts = data.load(os.path.join(self.path, "contracts.json"))
+            self.initial = data.load(os.path.join(self.name, "initial.json"))
+            self.services = data.load(os.path.join(self.name, "services.json"))
+            self.staff = data.load(os.path.join(self.name, "staff.json"))
+            self.patrons = data.load(os.path.join(self.name, "patrons.json"))
+            self.purchaseable = data.load(os.path.join(self.name, "purchaseable.json"))
+            self.contracts = data.load(os.path.join(self.name, "contracts.json"))
 
     def clear(self):
         self.patrons.clear()

@@ -6,6 +6,7 @@ from module_properties import Module
 from modules.tavern_simulator.data_packs import default_data_pack
 from modules.tavern_simulator.model.data_pack import DataPack
 from modules.tavern_simulator.model.tavern import Tavern
+from utils import constants
 from utils.errors import CommandRunError
 
 """
@@ -45,6 +46,7 @@ Define a current state view for the tavern
         key.value: "Human readable representation of this value of this key" 
 TODO: Document
 TODO: Game end listener (THIS IS IMPORTANT)
+TODO: We could make this a purchaseable module - if so I would need to reevaluate the load checks for data packs
 """
 
 
@@ -53,15 +55,17 @@ class TavernSimulator(Module):
         super().__init__("tavern_simulator", manager)
 
         self.taverns = dict()
+        self.game_master = self.manager.get_module("game_master_new")
+        if self.game_master:
+            self.game_master.register_game_state_listener(self)
+        else:
+            raise RuntimeError("Cannot use the tavern simulator without the Game Master module.")
 
         # TODO: We should load taverns here
 
     def cog_check(self, ctx: commands.Context):
         if not ctx.guild:
             raise commands.NoPrivateMessage('This command can\'t be used in DM channels.')
-
-        elif not self.manager.get_module("game_master"):
-            raise CommandRunError("This module cannot be run without the game_master module.")
 
         return True
 
@@ -70,14 +74,33 @@ class TavernSimulator(Module):
             await ctx.send(error.detail)
             return
 
-        await ctx.send('An error occurred: {}'.format(str(error)))
+        await ctx.send('`An error occurred: {}`'.format(str(error)))
 
-    def is_running_game_and_is_gm(self, ctx):
-        game_master = self.manager.get_module("game_master")
-        return game_master.get_game() and game_master.get_gm() == ctx.author.id
+    async def get_tavern_for_context(self, ctx):
+        game = self.game_master.get_active_game_for_context(ctx)
+        if game.get_name() in self.taverns:
+            return self.taverns[game.get_name()]
 
-    @commands.command(name="initialize")
-    @commands.has_any_role("GM", "@admin")
+        return None
+
+    async def set_tavern_for_context(self, ctx, tavern):
+        game = self.game_master.get_active_game_for_context(ctx)
+        self.taverns[game.get_name()] = tavern
+
+    # TODO:
+    async def game_created(self, ctx, game):
+        pass
+
+    async def game_started(self, ctx, game):
+        pass
+
+    async def game_ended(self, ctx, game):
+        pass
+
+    async def game_deleted(self, ctx, game):
+        pass
+
+    @commands.command(name="tavern:initialize")
     async def _initialize(self, ctx: commands.Context, *, pack: str = ""):
         """
         1) Can we run this
@@ -86,47 +109,48 @@ class TavernSimulator(Module):
         4) Load the data pack
         5) Save it into local
         """
+        # Check if we are running a game
+        if not self.game_master.is_game_running_for_context(ctx):
+            return ctx.send("`A game must be running in order to interact with the tavern.`")
 
-        # Are we a gm
-        if not self.is_running_game_and_is_gm(ctx):
-            raise CommandRunError("Only the GM can initialize the purchase of a tavern!")
+        # Can this user initiate the call to this command
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern_simulator:tavern:initialize", special_roles=constants.owner_or_role):
+            return await ctx.send("`You do not have permission to run that command.`")
 
-        # Is there a tavern already running for this session
-        game_master = self.manager.get_module("game_master")
-        if game_master.get_game() in self.taverns:
-            raise CommandRunError("A tavern is already initialized for this game!")
+        # Check if we have a tavern here!
+        tavern = await self.get_tavern_for_context(ctx)
+        if tavern:
+            return await ctx.send("`There is already a tavern operating in your current game!`")
 
-        # Parse the input strings to look for a data pack
-        data_packs_path = os.path.join(".", self.name, "data_packs")
+        # Look for a data pack base on our input.
         data_pack = None
-        if pack != "" and pack != "FORCE":
-            data_pack = await self.manager.load_data(data_packs_path, pack)
+        data_packs_path = os.path.join(self.name, "data_packs")
 
-        # Load default file if not forced
-        if data_pack is None and pack != "FORCE":
-            await ctx.send("Could not find data_pack: " + pack + " using default instead")
-            data_pack = DataPack(os.path.join(data_packs_path, "default_data_pack"))
-            await data_pack.load(self.manager)
+        # First check our guild specific dir and our local bot directory
+        if pack != "" and pack != "FORCE":
+            await ctx.send("`Attempting to load data pack: " + pack + "`")
+            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, pack)
+
+        # Fallback to default_data_oack
+        named_data_pack_path = os.path.join(data_packs_path, "default_data_pack")
+        if not data_pack and pack != "FORCE":
+            await ctx.send("`Could not find a data pack named: " + pack + " using default instead.`")
+            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, "default_data_pack")
 
         # If its still not full we can dump our code based one to file and use that
         if data_pack is None or pack == "FORCE":
+            await ctx.send("`Using the in code data pack.`")
             data_pack = default_data_pack.create_default_data_pack(data_packs_path)
-            await data_pack.save(self.manager)
+            await data_pack.save(self.manager, ctx)
 
         # Check that we actually have data
         if data_pack is None:
-            raise CommandRunError("No default data pack detected!")
+            return await ctx.send("`No data pack could be loaded!`")
 
-        # Check that we can create our tavern
-        tavern_path = os.path.join(game_master.get_game_data_path(), self.name)
-        tavern_file = os.path.join(tavern_path, "tavern_status.json")
-        if os.path.isfile(tavern_file):
-            return await ctx.send("There is a save file present at game: " + game_master.get_game_data_path() + "/tavern/tavern_status.json. This will need to be manually removed for now.")
-
-        # Create a tavern - note this should handle the file saving at the same time!
-        tavern_state = await Tavern.create_tavern(self.manager, tavern_file, data_pack)
-        self.taverns[game_master.get_game()] = tavern_state
-        return await ctx.send("Successfully created a tavern for your adventuring party!")
+        # Create a tavern
+        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern", data_pack)
+        await self.set_tavern_for_context(ctx, tavern)
+        return await ctx.send("`Successfully created a tavern for your adventuring party!`")
 
     @commands.command(name="status")
     async def _status(self, ctx: commands.Context):
@@ -143,6 +167,3 @@ class TavernSimulator(Module):
         1) Can we run this
         2) We should check if a data pack is loaded for this game, return if not
         """
-
-        if not self.is_running_game_and_is_gm(ctx):
-            raise CommandRunError("Only the GM can initialize the purchase of a tavern")

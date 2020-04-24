@@ -2,14 +2,16 @@ import os
 
 from scipy import stats
 
-from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff
+from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff, DataPack
 from modules.tavern_simulator.model.outcomes import Sale
 from utils import math
 
 
 class TavernStatus:
-    def __init__(self, data_pack_path, tavern_purchases=None, staff=None):
-        self.data_pack_pacth = data_pack_path
+    def __init__(self, data_pack_name, data_pack_path, is_guild_specific_data_pack, tavern_purchases=None, staff=None):
+        self.data_pack_name = data_pack_name
+        self.data_pack_path = data_pack_path
+        self.is_guild_specific_data_pack = is_guild_specific_data_pack
 
         if tavern_purchases is None:
             tavern_purchases = list()
@@ -45,13 +47,29 @@ class TavernStatus:
 # Design goal: Simulate a week (tenday) for a D&D Tavern!
 class Tavern:
     @classmethod
-    async def create_tavern(cls, manager, tavern_status_file, data_pack):
-        tavern = Tavern(manager, tavern_status_file, data_pack)
-        return await tavern.load()
+    async def load_tavern(cls, manager, game_master, ctx, path_modifier, data_pack=None):
+        tavern_status = None
+        if game_master and ctx:
+            tavern_status = await game_master.load_game_data(ctx, path_modifier, "tavern.json")
 
-    def __init__(self, manager, tavern_status_file, data_pack):
-        self.manager = manager
-        self.tavern_status_file = tavern_status_file
+        # Ensure we have a data pack when creating the tavern for the first time
+        if not tavern_status and not data_pack:
+            raise RuntimeError("If you are creating a tavern for the first time, you need to supply the data pack.")
+
+        # Now we should load our relevant data pack into mem
+        if not data_pack:
+            data_pack = DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
+
+        # Create our tavern
+        tavern = Tavern(data_pack, tavern_status=tavern_status)
+
+        # If its empty the new tavern would have created a tavern state, so we should save it to disk
+        if not tavern_status:
+            await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
+
+        return tavern_status
+
+    def __init__(self, data_pack, tavern_status=None):
         self.data_pack = data_pack
 
         # Current non-serialized properties
@@ -63,7 +81,13 @@ class Tavern:
         self.sales = list()
 
         # Force data state to serialize
-        self.tavern_status = None
+        if not tavern_status:
+            self.tavern_status = TavernStatus(self.data_pack.get_name(), self.data_pack.get_path(), self.data_pack.is_guild)
+        else:
+            self.tavern_status = tavern_status
+
+    def get_tavern_status(self):
+        return self.tavern_status
 
     def provides_for(self, data_obj):
         prerequisites = data_obj.get_prerequisites()
@@ -94,18 +118,6 @@ class Tavern:
     def hire_staff(self, staff, amount=1):
         for i in range(0, amount):
             self.apply_purchase(staff)
-
-    async def save(self):
-        await self.manager.save_data_at(self.tavern_status_file, self.tavern_status)
-
-    async def load(self):
-        if os.path.isfile(self.tavern_status_file):
-            self.tavern_status = await self.manager.load_data_at(self.tavern_status_file)
-        else:
-            self.tavern_status = TavernStatus(self.data_pack.get_path())
-            await self.save()
-
-        await self.validate()
 
     def clear(self):
         self.tavern_status.clear()

@@ -4,7 +4,9 @@ import discord
 from discord.ext import commands
 
 from module_properties import Module
-from modules.game.data import Games, GameEntry, PlayerEntry
+from modules.game.games import Games, GameEntry, PlayerEntry
+from modules.game.game_state_listener import GameStateListener
+from utils import constants
 from utils.errors import CommandRunError
 
 """
@@ -18,14 +20,21 @@ TODO: QOL functions
 TODO: Delete game with no name should delete the current game
 TODO: !game <gamename> should perhaps be !play <gamename>
 TODO: Delete even if you don't have a voice connection?
+TODO: What if we want a game, but really we just only want one, want to use general + voice? 
+
+
+TODO: 1 game per guild active!!!! Multiple games.
 """
 
 
 class GameMaster(Module):
-    member_permissions = discord.PermissionOverwrite(read_messages=True, send_messages=True, create_instant_invite=True, manage_channels=True, manage_permissions=True, manage_webhooks=True, send_tts_messages=True, manage_messages=True, embed_links=True, attach_files=True, read_message_history=True, mention_everyone=True, external_emojis=True, add_reactions=True)
 
     def __init__(self, manager):
         super().__init__("game_master", manager)
+
+        self.game_state_listeners = list()
+        self.games = dict()
+        self.games_loaded = False
 
         self.game = None
         self.gm = None
@@ -48,52 +57,58 @@ class GameMaster(Module):
 
         await ctx.send('An error occurred: {}'.format(str(error)))
 
-    def get_game(self):
-        return self.game
+    async def cog_before_invoke(self, ctx: commands.Context):
+        if not self.games_loaded:
+            self.__load_games(ctx)
 
-    def get_gm(self):
-        return self.gm
+        ctx.game = await self.get_game_session(ctx)
 
-    def get_gm_real(self):
-        return self.gm_real
+    def register_game_state_listener(self, module: GameStateListener):
+        self.game_state_listeners.append(module)
 
-    def is_adventurer(self, id):
-        for player in self.players:
-            if player.player_id == id:
-                return True
+    async def can_access_game(self, ctx: commands.Context, minimum_required_permissions=constants.admin):
+        # Get our party permissions
+        adventuring_party_module = self.manager.get_module("party_manager")
+        if adventuring_party_module:
+            # This handles both situations where the user does and does not have a game now
+            return await adventuring_party_module.is_allowed(minimum_required_permissions, ctx)
 
-        return False
+        else:
+            return minimum_required_permissions == 0 or ctx.author.guild_permissions.administrator
+
+    def get_game_session(self, ctx):
+        guild_id = str(ctx.guild.id)
+        if guild_id in self.games:
+            return self.games[guild_id]
+        return None
 
     def get_game_data_path(self):
         return os.path.join("game", self.game)
 
-    def is_in_game(self, ctx):
-        if self.get_game():
-            return self.is_adventurer(ctx.author.id)
-
-        return False
-
-    @commands.command(name="game")
-    @commands.has_any_role("GM", "@admin")
-    async def __game(self, ctx: commands.Context, *, name: str):
-        if self.game is not None:
-            await ctx.send("Already running a game: " + self.game)
-            return
-
-        # Validate that our game doesn't exist already
+    async def __load_game_data(self, ctx):
         games = await self.manager.load_data("game", "game_states")
         if not games:
             games = Games()
 
+    @commands.command(name="game")
+    @commands.has_any_role("GM", "@admin")
+    async def __game(self, ctx: commands.Context, *, name: str):
+        if ctx.game is not None:
+            return await ctx.send("`Already running a game: " + ctx.game.get_name() + "`")
+
+        # Validate that our game doesn't exist already
+        await self.__load_game_data(ctx)
+
         # Check if this game is already registered
-        existing_game = games.get_game(name)
+        existing_game = games._get_game(name)
 
         # Validate our caller vs internal
-        if existing_game and existing_game.gm != ctx.author.id:
-            await ctx.send("Unfortunately this game already exists and you are not the GM of it.")
-            return
+        if existing_game and existing_game.get_gm() != ctx.author.id:
+            return await ctx.send("`Unfortunately this game already exists and you are not the GM of it.`")
 
         # Set our local information
+        unique_id = ctx.guild.id + name
+        path = os.path.join("game", unique_id)
         self.game = name
         self.gm = ctx.author.id
         self.gm_real = ctx.author.name
@@ -104,11 +119,7 @@ class GameMaster(Module):
         await ctx.send("Starting game: " + self.game)
 
         # Permissions
-        everyone = discord.PermissionOverwrite(read_messages=False, send_messages=False, create_instant_invite=False, manage_channels=False, manage_permissions=False, manage_webhooks=False, send_tts_messages=False, manage_messages=False, embed_links=False, attach_files=False, read_message_history=False, mention_everyone=False, external_emojis=False, add_reactions=False)
-
         admin_role = discord.utils.get(ctx.guild.roles, name="@admin")
-        admin = discord.PermissionOverwrite(read_messages=True, send_messages=True, create_instant_invite=True, manage_channels=True, manage_permissions=True, manage_webhooks=True, send_tts_messages=True, manage_messages=True, embed_links=True, attach_files=True, read_message_history=True, mention_everyone=True, external_emojis=True, add_reactions=True)
-
         me_member = ctx.author
         bot_member = self.manager.get_bot_member(ctx)
 
@@ -125,10 +136,11 @@ class GameMaster(Module):
                 break
 
         if not exists:
-            self.text_channel = await ctx.guild.create_text_channel(name, overwrites={ctx.guild.default_role: everyone, me_member: GameMaster.member_permissions, bot_member: GameMaster.member_permissions, admin_role: admin}, userlimit=0, category=ctx.guild.categories[0])
+            self.text_channel = await ctx.guild.create_text_channel(name, overwrites={ctx.guild.default_role: constants.closed, me_member: constants.open, bot_member: constants.open, admin_role: constants.open}, userlimit=0, category=ctx.guild.categories[0])
 
         # Create the voice channel
-        self.voice_channel = await ctx.guild.create_voice_channel(name, overwrites={ctx.guild.default_role: everyone, me_member: GameMaster.member_permissions, bot_member: GameMaster.member_permissions, admin_role: admin}, bitrate=64000, userlimit=0, permissions_synced=True, category=ctx.guild.categories[1])
+        # TODO: Move this to music module
+        self.voice_channel = await ctx.guild.create_voice_channel(name, overwrites={ctx.guild.default_role: constants.closed, me_member: constants.open, bot_member: constants.open, admin_role: constants.open}, bitrate=64000, userlimit=0, permissions_synced=True, category=ctx.guild.categories[1])
         if ctx.author.voice:
             self.original_channel = ctx.author.voice.channel
             await ctx.author.move_to(self.voice_channel)
@@ -138,6 +150,7 @@ class GameMaster(Module):
         await self.manager.create(os.path.join("game", self.game))
 
         # If the music player is present lets pull it into our game too!
+        # TODO: Move this to music module
         module = self.manager.get_module("bardic_inspiration")
         if module is not None:
             ctx.voice_state = module.get_voice_state(ctx)
@@ -145,9 +158,15 @@ class GameMaster(Module):
 
         # Remember this game
         if not existing_game:
-            game = GameEntry(self.game, self.gm, self.gm_real, self.players)
+            game = GameEntry(unique_id, path, self.game, self.gm, self.gm_real, self.players)
             games.add_game(game)
             await self.manager.save_data("game", "game_states", games)
+        else:
+            game = existing_game
+
+        # Let our game state listeners know
+        for listener in self.game_state_listeners:
+            await listener.game_started(ctx, game)
 
     @commands.command(name="end")
     @commands.has_any_role("GM", "@admin")
@@ -158,6 +177,11 @@ class GameMaster(Module):
 
         # Only allow an administrator or the owner to end a game
         if ctx.author.id == self.gm or ctx.author.guild_permissions.administrator:
+
+            # Notify listeners
+            for listener in self.game_state_listeners:
+                await listener.game_ended(ctx, self.game)
+
             await ctx.send("Okay! Thanks for playing in: " + self.game)
             self.game = None
             self.gm = None
@@ -167,11 +191,12 @@ class GameMaster(Module):
         else:
             await ctx.send("Only your current GM can end a game (or an admin if something is bugged).")
 
+        # Properly exit the channel
+        #TODO: Move this to music
         if self.original_channel:
             await ctx.author.move_to(self.original_channel)
             await ctx.send("You have been returned to: " + self.voice_channel.name)
 
-        # Properly exit the channel
         module = self.manager.get_module("bardic_inspiration")
         if module is not None:
             ctx.voice_state = module.get_voice_state(ctx)
@@ -180,7 +205,7 @@ class GameMaster(Module):
         await self.voice_channel.delete()
         self.voice_channel = None
 
-        # TODO: Save all game data - from this module or otherwise
+        # TODO: Save all game data - from this module or otherwise)
 
     @commands.command(name="list_games")
     async def _list_games(self, ctx: commands.Context):
@@ -199,7 +224,7 @@ class GameMaster(Module):
 
         # Get the game
         games = await self.manager.load_data("game", "game_states")
-        existing_game = games.get_game(name)
+        existing_game = games._get_game(name)
 
         # Exit if we have no game
         if not existing_game:
@@ -231,7 +256,11 @@ class GameMaster(Module):
         3) update channel permissions
         4) serialize to file
         """
-        if not self.is_in_game(ctx):
+        game = self.get_game_session(ctx)
+        if not game:
+            return await ctx.send("`You cannot add an adventurer if you are not in a game.`")
+
+        if game.is_adventurer(ctx):
             return await ctx.send("You cannot run this command as you are not in a game!")
 
         # Check if anyone was mentioned
@@ -262,7 +291,7 @@ class GameMaster(Module):
         games = await self.manager.load_data("game", "game_states")
 
         # Serialize out the data now
-        existing_game = games.get_game(self.game)
+        existing_game = games._get_game(self.game)
         existing_game.set_players(self.players)
         await self.manager.save_data("game", "game_states", games)
         return await ctx.send("Added the adventurer: " + adventurer + " to the party.")
@@ -309,7 +338,7 @@ class GameMaster(Module):
         games = await self.manager.load_data("game", "game_states")
 
         # Serialize out the data now
-        existing_game = games.get_game(self.game)
+        existing_game = games._get_game(self.game)
         existing_game.set_players(self.players)
         await self.manager.save_data("game", "game_states", games)
         return await ctx.send("Removed the adventurer from the party.")

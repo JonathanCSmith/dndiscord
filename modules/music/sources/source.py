@@ -4,6 +4,10 @@ import discord
 from discord.ext import commands
 
 
+class SourceError(Exception):
+    pass
+
+
 class Source(discord.PCMVolumeTransformer):
 
     def __init__(self, ctx: commands.Context, source: discord.FFmpegPCMAudio, *, data: dict, volume: float = 0.5):

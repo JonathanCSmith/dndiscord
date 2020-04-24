@@ -1,4 +1,4 @@
-class Music:
+class Favourites:
     def __init__(self, music=None):
         if music is None:
             music = list()
