@@ -87,8 +87,8 @@ class GameMaster(Module):
     def is_game_running_for_context(self, ctx):
         return ctx.guild.id in self.active_sessions
 
-    async def check_inactive_game_permissions_for_user(self, ctx, game_name, permission_name, permissions_level=constants.admin, special_roles=None):
-        # Get the requested game
+    async def check_inactive_game_permissions_for_user(self, ctx, game_name, permission_name, permissions_level=constants.admin, elevated_roles=None):
+        # Get the requested game - the game check takes precedence over the admin check as usually commands that call this will not function without a game
         game = await self.__get_game(ctx, game_name)
         if not game:
             return False
@@ -98,10 +98,16 @@ class GameMaster(Module):
             return True
 
         # Quick check to format the special roles
-        if not special_roles:
-            special_roles = list()
-        elif not isinstance(special_roles, list):
-            special_roles = [special_roles]
+        if not elevated_roles:
+            elevated_roles = list()
+        elif not isinstance(elevated_roles, list):
+            elevated_roles = [elevated_roles]
+
+        # Check if our user is in one of the special roles provided:
+        for role in ctx.author.roles:
+            for special_role in elevated_roles:
+                if role.name == special_role:
+                    return True
 
         # Get game permission overrides
         overwritten_permissions_level = game.get_permission_level(permission_name)
@@ -113,28 +119,22 @@ class GameMaster(Module):
             return True
 
         # This permissions level allows any member of the party to run the command
-        if permissions_level >= constants.party_member and game:
+        if permissions_level >= constants.party_member:
             if game.is_player(ctx.author.id):
                 return True
 
         # This permissions level only allows for the gm or elevated roles
-        if permissions_level >= constants.owner_or_role:
+        if permissions_level >= constants.gm:
 
             # Check if the user is the gm of the game
-            if game and game.is_gm(ctx.author.it):
+            if game.is_gm(ctx.author.it):
                 return True
-
-            # Check if our user is in one of the special roles provided:
-            for role in ctx.author.roles:
-                for special_role in special_roles:
-                    if role.name == special_role:
-                        return True
 
         # If the permissions level == 3 or if it was an unregistered permission and the user is not an admin
         return False
 
-    async def check_active_game_permissions_for_user(self, ctx, permission_name, permissions_level=constants.admin, special_roles=None):
-        # Get the active game
+    async def check_active_game_permissions_for_user(self, ctx, permission_name, permissions_level=constants.admin, elevated_roles=None):
+        # Get the requested game - the game check takes precedence over the admin check as usually commands that call this will not function without a game
         game = self.get_active_game_for_context(ctx)
         if not game:
             return False
@@ -144,10 +144,16 @@ class GameMaster(Module):
             return True
 
         # Quick check to format the special roles
-        if not special_roles:
-            special_roles = list()
-        elif not isinstance(special_roles, list):
-            special_roles = [special_roles]
+        if not elevated_roles:
+            elevated_roles = list()
+        elif not isinstance(elevated_roles, list):
+            elevated_roles = [elevated_roles]
+
+        # Check if our user is in one of the special roles provided:
+        for role in ctx.author.roles:
+            for special_role in elevated_roles:
+                if role.name == special_role:
+                    return True
 
         # Get game permission overrides
         overwritten_permissions_level = game.get_permission_level(permission_name)
@@ -159,36 +165,36 @@ class GameMaster(Module):
             return True
 
         # This permissions level allows any member of the party to run the command
-        if permissions_level >= constants.party_member and game:
+        if permissions_level >= constants.party_member:
             if game.is_player(ctx.author.id):
                 return True
 
         # This permissions level only allows for the gm or elevated roles
-        if permissions_level >= constants.owner_or_role:
+        if permissions_level >= constants.gm:
 
             # Check if the user is the gm of the game
-            if game and game.is_gm(ctx.author.it):
+            if game.is_gm(ctx.author.it):
                 return True
-
-            # Check if our user is in one of the special roles provided:
-            for role in ctx.author.roles:
-                for special_role in special_roles:
-                    if role.name == special_role:
-                        return True
 
         # If the permissions level == 3 or if it was an unregistered permission and the user is not an admin
         return False
 
-    async def check_guild_permissions_for_user(self, ctx, permission_name, permissions_level=constants.admin, special_roles=None):
+    async def check_guild_permissions_for_user(self, ctx, permission_name, permissions_level=constants.admin, elevated_roles=None):
         # If the user is an administrator we ALWAYS allow
         if ctx.author.guild_permissions.administrator:
             return True
 
         # Quick check to format the special roles
-        if not special_roles:
-            special_roles = list()
-        elif not isinstance(special_roles, list):
-            special_roles = [special_roles]
+        if not elevated_roles:
+            elevated_roles = list()
+        elif not isinstance(elevated_roles, list):
+            elevated_roles = [elevated_roles]
+
+        # Check if our user is in one of the special roles provided:
+        for role in ctx.author.roles:
+            for special_role in elevated_roles:
+                if role.name == special_role:
+                    return True
 
         # Obtain any registered permission overwrites
         guild_data = await self.__get_guild_data(ctx)
@@ -199,15 +205,6 @@ class GameMaster(Module):
         # If it open to anyone
         if permissions_level == constants.open:
             return True
-
-        # This permissions level only allows for the gm or elevated roles
-        if permissions_level >= constants.owner_or_role:
-
-            # Check if our user is in one of the special roles provided:
-            for role in ctx.author.roles:
-                for special_role in special_roles:
-                    if role.name == special_role:
-                        return True
 
         # If the permissions level == 3 or if it was an unregistered permission and the user is not an admin
         return False
@@ -295,7 +292,7 @@ class GameMaster(Module):
         :return:
         """
         # Can this user initiate the call to this command
-        if not await self.check_guild_permissions_for_user(ctx, "game_master:register", special_roles=self.gm_roles):
+        if not await self.check_guild_permissions_for_user(ctx, "game_master:register", elevated_roles=self.gm_roles):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Check if there is already a game with the provided name available for this context
@@ -319,8 +316,8 @@ class GameMaster(Module):
     @commands.command(name="game:run")
     async def _run_game(self, ctx: commands.Context, *, game_name: str):
         # Can this user initiate the call to this command
-        if not await self.check_inactive_game_permissions_for_user(ctx, game_name, "game_master:run", permissions_level=constants.owner_or_role):
-            return await ctx.send("`You do not have permission to run that command.`")
+        if not await self.check_inactive_game_permissions_for_user(ctx, game_name, "game_master:run", permissions_level=constants.gm):
+            return await ctx.send("`You do not have permission to run that command or that game does not exist.`")
 
         # Is there a game running for this guild
         if self.is_game_running_for_context(ctx):
@@ -349,7 +346,7 @@ class GameMaster(Module):
     @commands.command(name="game:end")
     async def _end_game(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:end", permissions_level=constants.owner_or_role):
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:end", permissions_level=constants.gm):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Is there game currently running
@@ -370,8 +367,8 @@ class GameMaster(Module):
     @commands.command(name="game:delete")
     async def _delete_game(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:delete", permissions_level=constants.owner_or_role):
-            return await ctx.send("`You do not have permissions to run that command.`")
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:delete", permissions_level=constants.gm):
+            return await ctx.send("`You do not have permissions to run that command or the game does not exist.`")
 
         # Is there game currently running
         game = self.get_active_game_for_context(ctx)
@@ -397,9 +394,9 @@ class GameMaster(Module):
                     await ctx.send("`" + game.get_name() + "`")
 
     @commands.command(name="game:add_adventurer")
-    async def _add_adventurer(self, ctx: commands.Context, *, context: str):
+    async def _add_adventurer(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:add_adventurer", permissions_level=constants.owner_or_role):
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:add_adventurer", permissions_level=constants.gm):
             return await ctx.send("`You do not have permission to run that command`")
 
         # If no identifiable adventurers were mentioned
@@ -416,20 +413,26 @@ class GameMaster(Module):
         if game.is_player(player.id):
             return await ctx.send("`This adventurer already is a member of your party.`")
 
+        # Check args
+        context = ctx.message.clean_content.replace("!" + ctx.invoked_with, "")
+        adventurer_name = context.replace("@" + player.display_name, "").strip()
+        if not adventurer_name or adventurer_name == "":
+            return await ctx.send("`You must provide an adventurer name`")
+
         # Create a player entry
-        adventurer_name = context.replace(player.mention.replace("<@", "<@!") + " ", "")
         player_entry = Adventurer(player.id, player.name, adventurer_name)
 
         # Append our player entry and save the guild data
         game.add_player(player_entry)
-        await self.__save_guild_data(ctx, await self.__get_guild_data(ctx))
-
+        guild_data = await self.__get_guild_data(ctx)
+        guild_data.update_game(game)
+        await self.__save_guild_data(ctx, guild_data)
         return await ctx.send("`Added the adventurer: " + adventurer_name + " to the party.`")
 
     @commands.command(name="game:remove_adventurer")
     async def _remove_adventurer(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        if not await self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.owner_or_role):
+        if not await self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.gm):
             return await ctx.send("`You do not have permission to run that command`")
 
         # If no identifiable adventurers were mentioned

@@ -3,11 +3,18 @@
 3) [DONE] Run through our current module set and impl game_master_listener stuff
 4) [DONE] Run through our current modules, collate and re-evaluate local TODOs
 5) [DONE] Resting implementation
-6) Handbook implementation
-7) Game data implementation
+6) Tavern interactable by players
+7) Basic tavern tests
+8) Game Channels
+9) Tavern -> business impact assessment
+10) Handbook implementation
+11) Game data implementation
     (i.e. how does rest module know what to look for in inventory module
      in order to assess whether the adventurers have enough food)
-8) Tavern interactable by players
-9) Basic tavern tests
-10) Game Channels
-11) Tavern -> business impact assessment
+
+Randoms:
+
+    game:run tes didnt work for me
+    tavern initialize overwrite or fuck up
+    check permission should output True or reason
+    up enter

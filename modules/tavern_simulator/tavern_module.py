@@ -11,19 +11,6 @@ from utils.errors import CommandRunError
 
 """
 Define a current state view for the tavern
-
-    0) Initial: Large plot of land with three buildings and a garden area in the north ward.
-        a) Main building: Dilapidated but standing. Destroyed and non functional furnishings. Broken shutters and no glazing. Leaky roof. No water. Crumbling basement.
-        b) Kitchen & Utilities: Collapsed
-        c) Stables and large goods store: Collapsed
-        d) Garden: Overgrown
-        
-    1) Allow the players to view the current status of the tavern
-        a) Building status
-        b) Contracts <and remaining duration>
-        c) Current staff
-        d) Patron types visiting
-        e) Currently offered services
         
     2) Allow the players to determine what is available now
         a) List next services <implement a tier>
@@ -47,6 +34,8 @@ Define a current state view for the tavern
 TODO: Document
 TODO: Game end listener (THIS IS IMPORTANT)
 TODO: We could make this a purchaseable module - if so I would need to reevaluate the load checks for data packs
+TODO: Employee names
+TODO: Employee, Contract, Customer_History, Sales_History need custom data 
 """
 
 
@@ -86,35 +75,56 @@ class TavernSimulator(Module):
     async def set_tavern_for_context(self, ctx, tavern):
         game = self.game_master.get_active_game_for_context(ctx)
         self.taverns[game.get_name()] = tavern
+        await tavern.save(self.manager, self.game_master, ctx, "tavern")
 
-    # TODO:
+    async def unload_tavern_for_context(self, ctx, tavern):
+        game = self.game_master.get_active_game_for_context(ctx)
+        tavern = self.taverns[game.get_name()]
+        await tavern.save(self.manager, self.game_master, ctx, "tavern")
+        del self.taverns[game.get_name()]
+
     async def game_created(self, ctx, game):
         pass
 
     async def game_started(self, ctx, game):
-        pass
+        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern", None)
+        if tavern is not None:
+            await self.set_tavern_for_context(ctx, tavern)
 
     async def game_ended(self, ctx, game):
-        pass
+        await self.unload_tavern_for_context(ctx, game)
 
     async def game_deleted(self, ctx, game):
-        pass
+        # TODO DELTE DATA
+        await self.unload_tavern_for_context(ctx, game)
+
+    async def __get_data_pack(self, ctx, pack_name):
+        data_pack = None
+        data_packs_path = os.path.join(self.name, "data_packs")
+
+        # First check our guild specific dir and our local bot directory
+        if pack_name != "" and pack_name != "FORCE":
+            await ctx.send("`Attempting to load data pack: " + pack_name + "`")
+            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, pack_name)
+
+        # Fallback to default_data_oack
+        named_data_pack_path = os.path.join(data_packs_path, "default_data_pack")
+        if not data_pack and pack_name != "FORCE":
+            await ctx.send("`Could not find a data pack named: " + pack_name + " using default instead.`")
+            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, "default_data_pack")
+
+        # If its still not full we can dump our code based one to file and use that
+        if data_pack is None or pack_name == "FORCE":
+            await ctx.send("`Using the in code data pack.`")
+            data_pack = default_data_pack.create_new_default_data_pack(data_packs_path)
+            await data_pack.save(self.manager, ctx)
+
+        return data_pack
 
     @commands.command(name="tavern:initialize")
     async def _initialize(self, ctx: commands.Context, *, pack: str = ""):
-        """
-        1) Can we run this
-        2) Check if a tavern is running for this game already, if so return
-        3) Identify a data_pack based on data_pack - if not present default
-        4) Load the data pack
-        5) Save it into local
-        """
-        # Check if we are running a game
-        if not self.game_master.is_game_running_for_context(ctx):
-            return ctx.send("`A game must be running in order to interact with the tavern.`")
-
         # Can this user initiate the call to this command
-        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", special_roles=constants.owner_or_role):
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", permissions_level=constants.gm):
             return await ctx.send("`You do not have permission to run that command.`")
 
         # Check if we have a tavern here!
@@ -123,25 +133,7 @@ class TavernSimulator(Module):
             return await ctx.send("`There is already a tavern operating in your current game!`")
 
         # Look for a data pack base on our input.
-        data_pack = None
-        data_packs_path = os.path.join(self.name, "data_packs")
-
-        # First check our guild specific dir and our local bot directory
-        if pack != "" and pack != "FORCE":
-            await ctx.send("`Attempting to load data pack: " + pack + "`")
-            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, pack)
-
-        # Fallback to default_data_oack
-        named_data_pack_path = os.path.join(data_packs_path, "default_data_pack")
-        if not data_pack and pack != "FORCE":
-            await ctx.send("`Could not find a data pack named: " + pack + " using default instead.`")
-            data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, "default_data_pack")
-
-        # If its still not full we can dump our code based one to file and use that
-        if data_pack is None or pack == "FORCE":
-            await ctx.send("`Using the in code data pack.`")
-            data_pack = default_data_pack.create_default_data_pack(data_packs_path)
-            await data_pack.save(self.manager, ctx)
+        data_pack = await self.__get_data_pack(ctx, pack)
 
         # Check that we actually have data
         if data_pack is None:
@@ -152,18 +144,83 @@ class TavernSimulator(Module):
         await self.set_tavern_for_context(ctx, tavern)
         return await ctx.send("`Successfully created a tavern for your adventuring party!`")
 
-    @commands.command(name="status")
-    async def _status(self, ctx: commands.Context):
-        """
-        1) Check if the user is in the game
-        2) Gather the tavern
-        3) Print relevant information
-        """
+    @commands.command(name="tavern:name")
+    async def _name(self, ctx: commands.Context, *, name: str = ""):
+        # Can the user initiate the call to this command
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", permissions_level=constants.party_member):
+            return await ctx.send("`You do not have permission to run that command.`")
 
-    @commands.command(name="purchase_tavern")
-    @commands.has_any_role("GM", "@admin")
-    async def _purchase(self, ctx: commands.Context, *, terms: str):
-        """
-        1) Can we run this
-        2) We should check if a data pack is loaded for this game, return if not
-        """
+        # Get the tavern and exit if there is none
+        tavern = await self.get_tavern_for_context(ctx)
+        if not tavern:
+            return await ctx.send("`There is no tavern being operated in your game!`")
+
+        # Set the tavern and save
+        tavern.set_name(name)
+        return await ctx.send("`Changed the name of your tavern to: " + name + "`")
+
+    @commands.command(name="tavern:status")
+    async def _status(self, ctx: commands.Context):
+        # Can this user initiate the call to this command
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", permissions_level=constants.party_member):
+            return await ctx.send("`You do not have permission to run that command.`")
+
+        # Get the tavern and exit if there is none
+        tavern = await self.get_tavern_for_context(ctx)
+        if not tavern:
+            return await ctx.send("`There is no tavern being operated in your game!`")
+
+        # List the tavern properties in a human readable manner:
+        # TODO: Create a string builder, if num chars goes over 4000 then we post and continue
+        async with ctx.typing():
+            await ctx.send("`Your business: " + tavern.get_name() + " has the following properties:`")
+            for property, value in tavern.get_properties().items():
+                await ctx.send("`" + str(property) + (" with value: " + str(value) if value is not None else "") + "`")
+
+            # Staff
+            staff = tavern.get_staff()
+            count = len(staff)
+            await ctx.send("`You currently have " + str(count) + " employees." + (" They are:" if count > 0 else "") + "`")
+            for staff_member in staff:
+                await ctx.send("`" + str(staff_member) + "`")
+
+            # Active contracts
+            contracts = tavern.get_contracts()
+            await ctx.send("`You currently have " + str(len(contracts)) + " contracts ongoing.`")
+            for contract in contracts:
+                await ctx.send("`" + str(contract) + "`")
+
+            # Customers
+            customers = tavern.get_most_recent_customer_history()
+            if customers:
+                await ctx.send("`Last tenday you had the following customers: ")
+                for customer_entry in customers:
+                    await ctx.send("`" + str(customer_entry) + "`")
+            else:
+                await ctx.send("`You have had no customers over the last week.`")
+
+            # Offering
+            services = tavern.get_most_recent_sales_history()
+            if services:
+                await ctx.send("`Last tenday you served the following: `")
+                for service in services:
+                    await ctx.send("`" + str(service) + "`")
+            else:
+                await ctx.send("`You have had no sales over the last week.`")
+
+    @commands.command(name="tavern:purchaseable")
+    async def _purchaseable(self, ctx: commands):
+        # Can this user initiate the call to this command
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", permissions_level=constants.gm):
+            return await ctx.send("`You do not have permission to run that command.`")
+
+        # TODO: This should really be in the dm's
+        pass
+
+    @commands.command(name="tavern:purchase")
+    async def _purchase(self, ctx: commands.Context, *, item: str, negotiated_amount: int):
+        # Can this user initiate the call to this command
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:initialize", permissions_level=constants.gm):
+            return await ctx.send("`You do not have permission to run that command.`")
+
+        pass

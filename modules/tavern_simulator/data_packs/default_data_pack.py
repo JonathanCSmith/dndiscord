@@ -1,10 +1,96 @@
 import os
 
 from modules.tavern_simulator.model.data_pack import DataPack, Purchase, Contract, Service, Patron, Staff
+from modules.tavern_simulator.model.new_data_pack import BusinessState, FixedStateAttribute, ModificationAttribute, Purchaseable, Condition
+
+
+def create_new_default_data_pack(path):
+    data_pack = DataPack("default_data_pack", path, False, business_name="business.trollskull_manor", description="business.trollskull_manor.description")
+
+    data_pack = add_initial_tavern_states(data_pack)
+
+    return data_pack
+
+
+def add_initial_tavern_states(data_pack):
+    trollskull_manor_outset = BusinessState("trollskull_manor")
+    trollskull_manor_outset.append_provided(FixedStateAttribute("trollskull_manor_land", "unkept_and_poorly_maintaied"))
+    data_pack.add_initial(trollskull_manor_outset)
+
+    main_building = BusinessState("trollskull_manor_building")
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.condition", "poor"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.appearance", "poor"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.roof.condition", "poor"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.furnishings.condition", "broken"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.windows.condition", "broken_shutters"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.basement.condition", "crumbling_and_unsafe"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.services..water.state", "off"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.roof_space", "unsturdy"))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.communal_spaces.count", 7))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.rooms.count", 30))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.bathrooms.count", 7))
+    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.attic", "wet"))
+    data_pack.add_initial(main_building)
+
+    # Add the kitchen and utilities building
+    kitchen_and_utilities_building = BusinessState("kitchen_and_utilities_building")
+    kitchen_and_utilities_building.append_provided(FixedStateAttribute("kitchen_and_utilities_building.condition", "collapsed"))
+    kitchen_and_utilities_building.append_provided(FixedStateAttribute("kitchen_and_utilities_building.service.water.state", "off"))
+    data_pack.add_initial(kitchen_and_utilities_building)
+
+    # Add the stable and warehouse building
+    stable_and_warehouse_building = BusinessState("stable_and_warehouse_building")
+    stable_and_warehouse_building.append_provided(FixedStateAttribute("stable_and_warehouse_state", "collapsed"))
+    stable_and_warehouse_building.append_provided(FixedStateAttribute("stable_and_warehouse_water_services", "non_functional"))
+    data_pack.add_initial(stable_and_warehouse_building)
+
+    # Add the garden
+    garden = BusinessState("garden_plots")
+    garden.append_provided(FixedStateAttribute("garden_plots.condition", "overgrown_and_unmaintained"))
+    data_pack.add_initial(garden)
+
+    # Add a general outdoor status
+    outdoor = BusinessState("outdoor_areas")
+    garden.append_provided(FixedStateAttribute("outdoor_areas.private_street", "muddy_and_unmaintained"))
+    garden.append_provided(FixedStateAttribute("outdoor_areas.outdoor_lighting", "missing_or_broken"))
+    garden.append_provided(FixedStateAttribute("outdoor_areas.outdoor_signage", "missing_or_broken"))
+    data_pack.add_initial(outdoor)
+
+    return data_pack
+
+
+def add_basic_rebuild_purchases(data_pack):
+    manor_repair = Purchaseable("trollskull_manor_building_repair", 300, 1)
+    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.condition", ""))
+    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.condition", "poor"))
+    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.windows.condition", ""))
+    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.windows.condition", "broken_shutters"))
+    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.basement.condition", ""))
+    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.basement.condition", "crumbling_and_unsafe"))
+    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.condition", "basic"))
+    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.windows.condition", "shutters"))
+    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.basement.condition", "small_sturdy"))
+    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.appearance", "serviceable"))
+    data_pack.add_purchaseable(manor_repair)
+
+    roof_repair = Purchaseable("trollskull_manor_building_repair_roof", 300, 1)
+    roof_repair.append_prerequisite(Condition("has", "trollskull_manor_building.attic", ""))
+    roof_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.attic", "wet"))
+    roof_repair.append_prerequisite(Condition("has", "trollskull_manor_building.roof.condition", ""))
+    roof_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.roof.condition", "poor"))
+    roof_repair.append_provided(FixedStateAttribute("trollskull_manor_building.roof.condition", "good"))
+    roof_repair.append_provided(FixedStateAttribute("trollskull_manor_building.attic", "serviceable"))
+
+    plumbing_repair = Purchaseable("trollskull_manor_building_plumbing_repair", 100, 1)
+    plumbing_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.services..water.state", "off"))
+    plumbing_repair.append_provided(FixedStateAttribute("trollskull_manor_building.services..water.state", "on"))
+    data_pack.add_purchaseable(plumbing_repair)
+
+    return data_pack
 
 
 def create_default_data_pack(path):
-    data_pack = DataPack("default_data_pack", path, False)
+    data_pack = DataPack("default_data_pack", path, False, business_name="Trollskull Manor", description="Trollskull Manor Description")
 
     # Default data
     data_pack = add_initial_tavern_state(data_pack)
@@ -56,6 +142,10 @@ def add_initial_tavern_state(data_pack):
     return data_pack
 
 
+"""
+"""
+
+
 def add_rebuilds_from_disrepair(data_pack):
     """
     """
@@ -82,7 +172,6 @@ def add_rebuilds_from_disrepair(data_pack):
 
 
 def add_tier_1_service(data_pack):
-
     # Offer basic drinks
     basic_drinks_key_vals = dict()
     basic_drinks_key_vals["store_basic_drinks"] = "YES"

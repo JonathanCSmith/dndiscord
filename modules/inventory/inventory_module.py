@@ -46,7 +46,7 @@ class InventoryManager(Module, GameStateListener):
         if not game_master.is_game_running_for_context(ctx):
             return False
 
-        return await game_master.check_active_game_permissions_for_user(ctx, "inventory", permissions_level=constants.owner_or_role)
+        return await game_master.check_active_game_permissions_for_user(ctx, "inventory", permissions_level=constants.party_member)
 
     async def get_inventory(self, ctx: commands.Context, game=None):
         # Validate that we have permissions to access this
@@ -106,13 +106,14 @@ class InventoryManager(Module, GameStateListener):
         await self.unload_inventory(ctx, game)
 
     async def game_deleted(self, ctx, game):
+        # TODO: DELETE DATA
         await self.unload_inventory(ctx, game)
 
     """
     COMMANDS SECTION
     """
 
-    @commands.command(name="inventory:stash")
+    @commands.command(name="inventory:list")
     async def _inventory_stash(self, ctx: commands.Context):
         # Attempt to load our inventory
         if not ctx.inventory:
@@ -127,6 +128,45 @@ class InventoryManager(Module, GameStateListener):
         async with ctx.typing():
             for item in ctx.inventory:
                 await ctx.send("`" + str(item) + "`")
+
+    @commands.command(name="inventory:store:gold")
+    async def _store_gold(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+
+        # Add the item to our inventory
+        item = await ctx.inventory.add_object_to_inventory("gold", amount, 0)
+        await ctx.send("`You have stored: " + str(item) + "`")
+
+        # Save the changed inventory
+        return await self.save_inventory(ctx, ctx.inventory)
+
+    @commands.command(name="inventory:store:silver")
+    async def _store_silver(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+
+        # Add the item to our inventory
+        item = await ctx.inventory.add_object_to_inventory("silver", amount, 0)
+        await ctx.send("`You have stored: " + str(item) + "`")
+
+        # Save the changed inventory
+        return await self.save_inventory(ctx, ctx.inventory)
+
+    @commands.command(name="inventory:store:copper")
+    async def _store_copper(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+
+        # Add the item to our inventory
+        item = await ctx.inventory.add_object_to_inventory("copper", amount, 0)
+        await ctx.send("`You have stored: " + str(item) + "`")
+
+        # Save the changed inventory
+        return await self.save_inventory(ctx, ctx.inventory)
 
     @commands.command(name="inventory:store")
     async def _inventory_store(self, ctx: commands.Context, *, info: str):
@@ -160,6 +200,8 @@ class InventoryManager(Module, GameStateListener):
         # Check if our inventory has the items and the correct amount
         try:
             if await ctx.inventory.remove(args[0], int(args[1])):
+                # Save the changed inventory
+                await self.save_inventory(ctx, ctx.inventory)
                 return await ctx.send("`Removed: " + args[1] + " " + args[0] + "`")
             else:
                 return await ctx.send("`I cannot remove the requested items as either it is not in your stash or there is not enough!`")
@@ -171,8 +213,22 @@ class InventoryManager(Module, GameStateListener):
     async def _inventory_permissions(self, ctx: commands.Context, *, type: int):
         # Validate that we have permissions to access this
         if not ctx.inventory:
-            raise CommandRunError("`You do not have sufficient privileges to access modify the inventory permissions.`")
+            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
 
         # Get the game master
         await self.game_master.set_game_permissions_for_context(ctx, "inventory:inventory", type)
         return await ctx.send("`Changed privilege level to: " + str(type) + "`")
+
+    @commands.command(name="inventory:clear")
+    async def _inventory_clear(self, ctx: commands.Context):
+        # Validate that we have permissions to access this
+        if not ctx.inventory:
+            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
+
+        # Extra perms check
+        if not await self.game_master.check_active_game_permissions_for_user(ctx, "inventory:clear", permissions_level=constants.gm):
+            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
+
+        # Clear the inventory
+        ctx.inventory.clear()
+        return await self.save_inventory(ctx, ctx.inventory)

@@ -27,17 +27,22 @@ class Game:
         return self.game_name
 
     def is_gm(self, gm_id):
-        return gm_id == self.gm_id
+        return str(gm_id) == self.gm_id
 
     def get_players(self):
         return self.players
 
     def is_player(self, player_id):
-        return player_id in self.players
+        return str(player_id) in self.players
+
+    def add_player(self, player_entry):
+        self.players[str(player_entry.player_id)] = player_entry
 
     def get_permission_level(self, permissions_name):
         if permissions_name is self.permissions:
             return self.permissions[permissions_name]
+        else:
+            return -1
 
     def set_permissions_level(self, permissions_name, level):
         self.permissions[permissions_name] = level
@@ -72,6 +77,9 @@ class GuildData:
         if game.game_name in self.games:
             raise RuntimeError("You tried to overwrite a game called: " + game.game_name)
 
+        self.games[game.game_name] = game
+
+    def update_game(self, game):
         self.games[game.game_name] = game
 
     def remove_game(self, game: Game):

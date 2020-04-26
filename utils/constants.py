@@ -6,6 +6,6 @@ closed = discord.PermissionOverwrite(read_messages=False, send_messages=False, c
 
 # Permission levels
 admin = 3
-owner_or_role = 2
+gm = 2
 party_member = 1
 any = 0

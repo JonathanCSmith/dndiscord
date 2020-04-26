@@ -9,7 +9,7 @@ class Inventory:
             items = list()
         self.items = items
 
-        self.currency = {"gold_pieces": 0, "silver_pieces": 0, "copper_pieces": 0}
+        self.currency = {currency_handler.gold_pieces: 0, currency_handler.silver_pieces: 0, currency_handler.copper_pieces: 0}
 
     def __iter__(self):
         return self.items.__iter__()
@@ -64,6 +64,10 @@ class Inventory:
 
         else:
             self.currency = currency_handler.subtract(self.currency.copy(), obj, amount)
+
+    def clear(self):
+        self.items = dict()
+        self.currency = {currency_handler.gold_pieces: 0, currency_handler.silver_pieces: 0, currency_handler.copper_pieces: 0}
 
 
 class InventoryEntry:

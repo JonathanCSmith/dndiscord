@@ -3,45 +3,15 @@ import os
 from scipy import stats
 
 from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff, DataPack
+from modules.tavern_simulator.model.new_data_pack import BusinessState, Attribute, FixedStateAttribute
 from modules.tavern_simulator.model.outcomes import Sale
+from modules.tavern_simulator.model.tavern_status import TavernStatus
 from utils import math
 
 
-class TavernStatus:
-    def __init__(self, data_pack_name, data_pack_path, is_guild_specific_data_pack, tavern_purchases=None, staff=None):
-        self.data_pack_name = data_pack_name
-        self.data_pack_path = data_pack_path
-        self.is_guild_specific_data_pack = is_guild_specific_data_pack
-
-        if tavern_purchases is None:
-            tavern_purchases = list()
-        if staff is None:
-            staff = dict()
-
-        self.tavern_purchases = tavern_purchases
-        self.staff = staff
-
-    def add_purchase(self, upgrade):
-        self.tavern_purchases.append(upgrade.name)
-
-    def get_purchases(self):
-        return self.tavern_purchases
-
-    def set_purchases(self, upgrades):
-        self.tavern_purchases = upgrades
-
-    def hire_staff(self, staff, amount=1):
-        if staff.name in self.staff:
-            self.staff[staff.name] += amount
-        else:
-            self.staff[staff.name] = amount
-
-    def get_staff(self):
-        return self.staff
-
-    def clear(self):
-        self.tavern_purchases.clear()
-        self.staff.clear()
+"""
+TODO: When saving the state it may be worth remembering who edited it somehow? so that if we block an upgrade mid path we can remove all relevant upgrades...
+"""
 
 
 # Design goal: Simulate a week (tenday) for a D&D Tavern!
@@ -54,11 +24,11 @@ class Tavern:
 
         # Ensure we have a data pack when creating the tavern for the first time
         if not tavern_status and not data_pack:
-            raise RuntimeError("If you are creating a tavern for the first time, you need to supply the data pack.")
+            return None
 
         # Now we should load our relevant data pack into mem
         if not data_pack:
-            data_pack = DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
+            data_pack = await DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
 
         # Create our tavern
         tavern = Tavern(data_pack, tavern_status=tavern_status)
@@ -68,12 +38,15 @@ class Tavern:
             if game_master:
                 await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
             else:
-                raise RuntimeError("You haven't implemented this yet")
+                raise RuntimeError("You haven't implemented this yet.")
 
-        return tavern_status
+        return tavern
 
     def __init__(self, data_pack, tavern_status=None):
         self.data_pack = data_pack
+
+        # The business state descriptors
+        self.properties = dict()
 
         # Current non-serialized properties
         self.provided = dict()
@@ -83,14 +56,74 @@ class Tavern:
         self.maximum_patrons_satisfied = dict()
         self.sales = list()
 
-        # Force data state to serialize
+        # Create if new
         if not tavern_status:
             self.tavern_status = TavernStatus(self.data_pack.get_name(), self.data_pack.get_path(), self.data_pack.is_guild)
         else:
             self.tavern_status = tavern_status
 
+        # TODO: This should only be when creating status so we dont dupe
+        # Apply the data pack's initial? TODO: Move to a func somewhere
+        initials = self.data_pack.get_initial()
+        for key, initial in initials.items():
+            self.apply_state(initial)
+
+    """
+    Tavern Data
+    """
+    def get_name(self):
+        return self.tavern_status.get_name()
+
+    def get_properties(self):
+        return self.properties
+
+    def get_staff(self):
+        return self.tavern_status.get_staff()
+
+    def get_contracts(self):
+        return self.tavern_status.get_active_contracts()
+
+    def get_most_recent_customer_history(self):
+        return self.tavern_status.get_customer_history_for_week(-1)
+
+    def get_most_recent_sales_history(self):
+        return self.tavern_status.get_sales_history_for_week(-1)
+
+    async def save(self, manager, game_master, ctx, path_modifier):
+        if manager and game_master and ctx:
+            await game_master.save_game_data(ctx, path_modifier, "tavern.json", self.tavern_status)
+        else:
+            raise RuntimeError("You haven't implemented this yet.")
+
+    """
+    Tavern Mechanics
+    """
+
+    def add_purchase(self, purchase):
+        # TODO Inform tavern status for logging
+        self.tavern_status.purchase(purchase)
+        self.apply_state(purchase)
+
+    def apply_state(self, state: BusinessState):
+        # TODO: Check requirements
+        for key, attribute in state.provides.items():
+            self.apply_attribute(attribute)
+
+    def apply_attribute(self, attribute):
+        if isinstance(attribute, FixedStateAttribute):
+            self.properties[attribute.get_key()] = attribute.get_value()
+        else:
+            raise RuntimeError("You havent made this yet")
+
+    """
+    TESTED ZONE IS BELOW
+    """
+
     def get_tavern_status(self):
         return self.tavern_status
+
+    def set_name(self, name):
+        self.tavern_status.set_name(name)
 
     def provides_for(self, data_obj):
         prerequisites = data_obj.get_prerequisites()
@@ -111,7 +144,7 @@ class Tavern:
             self.tavern_status.add_purchase(purchase)
 
         elif isinstance(purchase, Staff):
-            self.tavern_status.hire_staff(purchase)
+            self.tavern_status.add_staff(purchase)
 
         self.provided.update(purchase.get_provided())
 

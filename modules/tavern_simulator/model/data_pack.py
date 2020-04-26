@@ -146,6 +146,13 @@ class Patron(Data):
         return self.consumed
 
 
+class DataPackData:
+    def __init__(self, pack_name, business_name, description):
+        self.pack_name = pack_name
+        self.business_name = business_name
+        self.description = description
+
+
 # TODO: Serialize only the keys - have separate files for the actual lists
 class DataPack:
     @classmethod
@@ -153,6 +160,7 @@ class DataPack:
         path_modifier = os.path.join(original_path_modifier, pack_name)
         if manager and ctx:
             is_guild = True
+            data_pack_data = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "data_pack.json")
             initial = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "initial.json")
             services = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "services.json")
             staff = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "staff.json")
@@ -161,8 +169,9 @@ class DataPack:
             contracts = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "contracts.json")
 
             # Try our backup
-            if not services or not staff or not patrons or not purchaseable:
+            if initial is None and services is None and staff is None and patrons is None and purchaseable is None and contracts is None:
                 is_guild = False
+                data_pack_data = await manager.load_data_from_data_path(path_modifier, "data_pack.json")
                 initial = await manager.load_data_from_data_path(path_modifier, "initial.json")
                 services = await manager.load_data_from_data_path(path_modifier, "services.json")
                 staff = await manager.load_data_from_data_path(path_modifier, "staff.json")
@@ -172,6 +181,7 @@ class DataPack:
 
         else:
             is_guild = False
+            data_pack_data = data.load(os.path.join(path_modifier, "data_pack.json"))
             initial = data.load(os.path.join(path_modifier, "initial.json"))
             services = data.load(os.path.join(path_modifier, "services.json"))
             staff = data.load(os.path.join(path_modifier, "staff.json"))
@@ -179,13 +189,13 @@ class DataPack:
             purchaseable = data.load(os.path.join(path_modifier, "purchaseable.json"))
             contracts = data.load(os.path.join(path_modifier, "contracts.json"))
 
-        # Output nothing
-        if not services or not staff or not patrons or not purchaseable:
+        # Output nothing TODO reasses for other business types
+        if initial is None and services is None and staff is None and patrons is None and purchaseable is None and contracts is None:
             return None
 
-        return DataPack(pack_name, original_path_modifier, is_guild, initial=initial, services=services, staff=staff, patrons=patrons, purchaseable=purchaseable, contracts=contracts)
+        return DataPack(pack_name, original_path_modifier, is_guild, data_pack_data=data_pack_data, initial=initial, services=services, staff=staff, patrons=patrons, purchaseable=purchaseable, contracts=contracts)
 
-    def __init__(self, name, path_modifier, is_guild, initial=None, services=None, staff=None, patrons=None, purchaseable=None, contracts=None):
+    def __init__(self, name, path_modifier, is_guild, business_name=None, description=None, data_pack_data=None, initial=None, services=None, staff=None, patrons=None, purchaseable=None, contracts=None):
         self.name = name
         self.path_modifier = path_modifier
         self.is_guild = is_guild
@@ -214,6 +224,13 @@ class DataPack:
             initial = dict()
         self.initial = initial
 
+        if not data_pack_data and not business_name:
+            raise RuntimeError("You cannot create a data pack without a business name or a data_pack_data object")
+        elif data_pack_data:
+            self.data_pack_data = data_pack_data
+        else:
+            self.data_pack_data = DataPackData(self.name, business_name, description)
+
     def get_name(self):
         return self.name
 
@@ -222,6 +239,9 @@ class DataPack:
 
     def add_initial(self, obj):
         self.initial[obj.name] = obj
+
+    def get_initial(self):
+        return self.initial
 
     def add_service(self, service):
         self.services[service.name] = service
@@ -269,6 +289,7 @@ class DataPack:
         save_path = os.path.join(self.path_modifier, self.name)
         if manager and ctx:
             if self.is_guild:
+                await manager.save_data_in_data_path_for_guild(ctx, save_path, "data_pack.json", self.data_pack_data)
                 await manager.save_data_in_data_path_for_guild(ctx, save_path, "initial.json", self.initial)
                 await manager.save_data_in_data_path_for_guild(ctx, save_path, "services.json", self.services)
                 await manager.save_data_in_data_path_for_guild(ctx, save_path, "staff.json", self.staff)
@@ -276,6 +297,7 @@ class DataPack:
                 await manager.save_data_in_data_path_for_guild(ctx, save_path, "purchaseable.json", self.purchaseable)
                 await manager.save_data_in_data_path_for_guild(ctx, save_path, "contracts.json", self.contracts)
             else:
+                await manager.save_data_in_data_path(save_path, "data_pack.json", self.data_pack_data)
                 await manager.save_data_in_data_path(save_path, "initial.json", self.initial)
                 await manager.save_data_in_data_path(save_path, "services.json", self.services)
                 await manager.save_data_in_data_path(save_path, "staff.json", self.staff)
@@ -284,6 +306,7 @@ class DataPack:
                 await manager.save_data_in_data_path(save_path, "contracts.json", self.contracts)
 
         else:
+            data.save(self.data_pack_data, os.path.join(self.path_modifier, self.name, "data_pack.json"))
             data.save(self.initial, os.path.join(self.path_modifier, self.name, "initial.json"))
             data.save(self.services, os.path.join(self.path_modifier, self.name, "services.json"))
             data.save(self.staff, os.path.join(self.path_modifier, self.name, "staff.json"))

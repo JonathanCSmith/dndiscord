@@ -1,11 +1,11 @@
 """
 TODO: Convert all of this to a handbook data pack - that way we could convert anything
 """
+import math
 
-
-gold_pieces = "gold_pieces"
-silver_pieces = "silver_pieces"
-copper_pieces = "copper_pieces"
+gold_pieces = "gold"
+silver_pieces = "silver"
+copper_pieces = "copper"
 gold_to_silver_conversion = silver_to_gold_conversion = silver_to_copper_conversion = copper_to_silver_conversion = 10
 
 
@@ -32,8 +32,9 @@ def subtract(purse, type, amount):
         elif purse[gold_pieces] != 0:
             amount -= purse[silver_pieces]
             purse[silver_pieces] = 0
-            amount = amount // silver_to_gold_conversion
-            subtract(purse, gold_pieces, amount)
+            amount_to_convert = int(math.ceil(float(amount) / float(silver_to_gold_conversion)))
+            purse[silver_pieces] += (amount_to_convert * 10) - amount
+            subtract(purse, gold_pieces, amount_to_convert)
 
         elif purse[copper_pieces] != 0:
             amount -= purse[silver_pieces]
@@ -51,7 +52,9 @@ def subtract(purse, type, amount):
         else:
             amount -= purse[copper_pieces]
             purse[copper_pieces] = 0
-            amount = amount // copper_to_silver_conversion
-            subtract(purse, silver_pieces, amount)
+            amount_to_convert = int(math.ceil(float(amount) / float(copper_to_silver_conversion)))
+            purse[copper_pieces] += (amount_to_convert * 10) - amount
+            subtract(purse, silver_pieces, amount_to_convert)
 
     return purse
+    p
