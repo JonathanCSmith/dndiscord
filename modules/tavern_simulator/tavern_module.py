@@ -98,7 +98,7 @@ class TavernSimulator(Module):
         await self.unload_tavern_for_context(ctx, game)
 
     async def game_deleted(self, ctx, game):
-        # TODO DELTE DATA
+        # TODO DELETE DATA
         await self.unload_tavern_for_context(ctx, game)
 
     async def _get_data_pack(self, ctx, pack_name):
@@ -145,6 +145,7 @@ class TavernSimulator(Module):
 
         data_packs_path = os.path.join(self.name, "data_packs")
         data_pack = await DataPack.load_data_pack(self.manager, ctx, data_packs_path, tavern.get_data_pack().get_name())
+        await tavern.refresh_data_pack(data_pack)
         await ctx.send("`Default data pack reloaded`")
 
     @commands.command(name="tavern:initialize")
@@ -274,8 +275,21 @@ class TavernSimulator(Module):
         # Get the results to post
         purchaseable = tavern.get_purchaseable()
 
-        # TODO: This should really be in the dm's
-        await ctx.author.send("This is a test")
+        # Create an output message
+        long_message = LongMessage()
+        long_message.add("The business can apply the following upgrades: ")
+
+        # Gather our business status
+        long_message.add("===================================")  # Fake new line
+        for purchaseable in purchaseable:
+            key = "tavern." + tavern.data_pack.name + "." + purchaseable.get_key()
+            purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, key)
+            long_message.add(purchaseable_name + " can be purchased for " + str(purchaseable.cost) + " gold and will take " + str(purchaseable.duration) + " days to construct")
+
+        # Output
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.author.send(message)
 
     @commands.command(name="tavern:purchase")
     async def _purchase(self, ctx: commands.Context, *, item: str, negotiated_amount: int):

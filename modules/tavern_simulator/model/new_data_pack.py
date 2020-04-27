@@ -40,6 +40,9 @@ class Condition(Attribute):
 
         self.condition_type = condition_type
 
+    def get_type(self):
+        return self.condition_type
+
 
 class BusinessState:
     def __init__(self, unique_key, name=None, requirements=None, provides=None):
@@ -58,6 +61,9 @@ class BusinessState:
             provides = dict()
         self.provides = provides
 
+    def get_key(self):
+        return self.unique_key
+
     def get_prerequisites(self):
         return self.requirements
 
@@ -75,6 +81,14 @@ class BusinessState:
 
 
 class Purchaseable(BusinessState):
+    def __init__(self, unique_key, cost, duration, name=None, requirements=None, provides=None):
+        super().__init__(unique_key, name=name, requirements=requirements, provides=provides)
+
+        self.cost = cost
+        self.duration = duration
+
+
+class Contract(BusinessState):
     def __init__(self, unique_key, cost, duration, name=None, requirements=None, provides=None):
         super().__init__(unique_key, name=name, requirements=requirements, provides=provides)
 

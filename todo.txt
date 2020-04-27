@@ -47,3 +47,5 @@ Randoms:
     get_purchaseable -> pre genned list
     Tavern() -> apply_history, find_applicable_purchases etc
     on_purchase -> find_applicable_purchases
+    cannot dm on reload_translations
+    untranslated view for easier pack creation?

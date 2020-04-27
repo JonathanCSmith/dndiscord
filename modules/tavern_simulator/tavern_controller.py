@@ -8,7 +8,6 @@ from modules.tavern_simulator.model.outcomes import Sale
 from modules.tavern_simulator.model.tavern import TavernStatus
 from utils import math
 
-
 """
 TODO: When saving the state it may be worth remembering who edited it somehow? so that if we block an upgrade mid path we can remove all relevant upgrades...
 """
@@ -47,14 +46,7 @@ class Tavern:
 
         # The business state descriptors
         self.properties = dict()
-
-        # Current non-serialized properties
-        self.provided = dict()
-        self.max_occupancy = 0
-        self.current_services_offered = dict()
-        self.visiting_patrons = list()
-        self.maximum_patrons_satisfied = dict()
-        self.sales = list()
+        self.current_purchaseables = list()  # TODO Change this name
 
         # Create if new
         if not tavern_status:
@@ -68,9 +60,22 @@ class Tavern:
         for key, initial in initials.items():
             self.apply_state(initial)
 
+        # Get all of our possible things we could apply
+        # TODO: This is currently only purchaseables
+        self.add_all_current_purchaseables()
+
+        # Current non-serialized properties
+        self.provided = dict()
+        self.max_occupancy = 0
+        self.current_services_offered = dict()
+        self.visiting_patrons = list()
+        self.maximum_patrons_satisfied = dict()
+        self.sales = list()
+
     """
     Tavern Data
     """
+
     def get_name(self):
         return self.tavern_status.get_name()
 
@@ -92,11 +97,111 @@ class Tavern:
     def get_most_recent_sales_history(self):
         return self.tavern_status.get_sales_history_for_week(-1)
 
+    def get_purchaseable(self):
+        return self.current_purchaseables
+
     async def save(self, manager, game_master, ctx, path_modifier):
         if manager and game_master and ctx:
             await game_master.save_game_data(ctx, path_modifier, "tavern.json", self.tavern_status)
         else:
             raise RuntimeError("You haven't implemented this yet.")
+
+    async def refresh_data_pack(self, data_pack):
+        self.__init__(data_pack, self.tavern_status)
+
+    def add_all_current_purchaseables(self):
+        self.current_purchaseables.clear()
+        all_purchaseables = self.data_pack.get_purchaseables()
+        for purchaseable in all_purchaseables:
+            if self.can_apply(purchaseable):
+                self.current_purchaseables.append(purchaseable)
+
+    def can_apply(self, appliable):
+        # Gather the prerequisites
+        prerequisites = appliable.get_prerequisites()
+        for prerequisite in prerequisites.values():
+            key = prerequisite.get_key()
+            value = prerequisite.get_value()
+            type = prerequisite.get_type()
+            if type == "equals":
+                if key in self.properties and value != self.properties[key]:
+                    return False
+
+            elif type == "doesnt_equal":
+                if key in self.properties and value == self.properties[key]:
+                    return False
+
+            elif type == "has":
+                if key not in self.properties:
+                    return False
+
+            elif type == "doesnt_have":
+                if key in self.properties:
+                    return False
+
+            elif type == "greater":
+                if key not in self.properties:
+                    return False
+
+                # Try in case we cant convert to float
+                try:
+                    conditional = float(value)
+                    current = float(self.properties[key])
+                    return current > conditional
+                except:
+                    return False
+
+            elif type == "greater_or_equal":
+                if key not in self.properties:
+                    return False
+
+                # Try in case we cant convert to float
+                try:
+                    conditional = float(value)
+                    current = float(self.properties[key])
+                    return current >= conditional
+                except:
+                    return False
+
+            elif type == "less":
+                if key not in self.properties:
+                    return False
+
+                # Try in case we cant convert to float
+                try:
+                    conditional = float(value)
+                    current = float(self.properties[key])
+                    return current < conditional
+                except:
+                    return False
+
+            elif type == "less_or_equal":
+                if key not in self.properties:
+                    return False
+
+                # Try in case we cant convert to float
+                try:
+                    conditional = float(value)
+                    current = float(self.properties[key])
+                    return current <= conditional
+                except:
+                    return False
+
+            elif type == "between":
+                if key not in self.properties:
+                    return False
+
+                # Try in case we cant convert to float
+                try:
+                    values = value.split("|")
+                    lower_conditional = float(values[0])
+                    upper_conditional = float(values[1])
+                    current = float(self.properties[key])
+                    return lower_conditional < current < upper_conditional
+                except:
+                    return False
+
+        return True
 
     """
     Tavern Mechanics
