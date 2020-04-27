@@ -32,8 +32,8 @@ class ModificationAttribute(Attribute):
 class Condition(Attribute):
     types = ["equals", "doesnt_equal", "has", "doesnt_have", "greater", "greater_or_equal", "less", "less_or_equal", "between"]
 
-    def __init__(self, condition_type, condition_key, condition_value):
-        super().__init__(condition_key, condition_value)
+    def __init__(self, condition_type, attribute_key, attribute_value):
+        super().__init__(attribute_key, attribute_value)
 
         if condition_type not in Condition.types:
             raise RuntimeError("Poor condition construction. Type was: " + condition_type)

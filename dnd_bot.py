@@ -9,6 +9,7 @@ from modules.harpers.harpers_module import Harpers
 from modules.services.services_module import ServicesManager
 from modules.tavern_simulator.tavern_module import TavernSimulator
 from utils import dice, data
+from utils.translations import TranslationSource, TranslationManager
 
 """
 Common func in DNDBot
@@ -54,6 +55,8 @@ class DNDiscordBot:
         self.data_path = os.path.join(".", "bot_data")
         self.data_store = None
         self.modules = dict()
+        self.translation_manager = TranslationManager()
+        self.current_localization = "default"
         self.description = '''dnd is AWESOME'''
         self.bot = commands.Bot(command_prefix='!', description=self.description)
         self.add_basic_commands(self.bot)
@@ -164,6 +167,12 @@ class DNDiscordBot:
         path = os.path.join(self.data_path, path)
         os.makedirs(path)
 
+    async def get_translation_for_current_localization(self, ctx, key):
+        return await self.translation_manager.get_translation(self.current_localization, ctx, key)
+
+    async def load_translations_package(self, ctx, translation_source: TranslationSource):
+        return await self.translation_manager.load_translations(self, ctx, translation_source)
+
     def run(self):
         self.bot.run(self.token)
 
@@ -174,6 +183,13 @@ class DNDiscordBot:
             print(bot.user.name)
             print(bot.user.id)
             print('------')
+
+        @bot.command()
+        async def reload_translations(ctx):
+            if ctx.author.guild_permissions.administrator:
+                await self.translation_manager.reload_translations(self, ctx)
+                return await ctx.send("`Reloaded translation packs.`")
+            return await ctx.send("`You are not administrator.`")
 
         @bot.command()
         async def hello(ctx):

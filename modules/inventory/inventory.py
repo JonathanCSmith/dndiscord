@@ -1,15 +1,23 @@
 import utils.currency as currency_handler
 
 
+"""
+TODO: Currency weight
+TODO: Ordering of currency when iterating through it
+"""
+
+
 class Inventory:
-    def __init__(self, id, items=None):
+    def __init__(self, id, items=None, currency=None):
         self.id = id
 
         if items is None:
             items = list()
         self.items = items
 
-        self.currency = {currency_handler.gold_pieces: 0, currency_handler.silver_pieces: 0, currency_handler.copper_pieces: 0}
+        if currency is None:
+            currency = {currency_handler.gold_pieces: 0, currency_handler.silver_pieces: 0, currency_handler.copper_pieces: 0}
+        self.currency = currency
 
     def __iter__(self):
         return self.items.__iter__()
@@ -20,7 +28,14 @@ class Inventory:
     def get_inventory_id(self):
         return self.id
 
+    def get_currency(self):
+        return self.currency
+
     async def add_object_to_inventory(self, obj, number, weight_per_obj):
+        if obj in self.currency:
+            self.currency[obj] += number
+            return str(number) + " " + obj
+
         for item in self.items:
             if obj == item.obj:
                 item.number += number
@@ -61,9 +76,16 @@ class Inventory:
     def remove_currency(self, obj, amount):
         if self.currency[obj] >= amount:
             self.currency -= amount
+            return True
 
         else:
-            self.currency = currency_handler.subtract(self.currency.copy(), obj, amount)
+            try:
+                new_currency = currency_handler.subtract(self.currency.copy(), obj, amount)
+            except currency_handler.CurrencyError:
+                return False
+
+            self.currency = new_currency
+            return True
 
     def clear(self):
         self.items = dict()

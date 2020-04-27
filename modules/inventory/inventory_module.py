@@ -40,18 +40,12 @@ class InventoryManager(Module, GameStateListener):
     async def cog_before_invoke(self, ctx: commands.Context):
         ctx.inventory = await self.get_inventory(ctx)
 
-    async def can_access(self, ctx: commands.Context, minimum_required_permissions=constants.admin):
-        # Get our party permissions
-        game_master = self.manager.get_module("game_master")
-        if not game_master.is_game_running_for_context(ctx):
-            return False
-
-        return await game_master.check_active_game_permissions_for_user(ctx, "inventory", permissions_level=constants.party_member)
-
     async def get_inventory(self, ctx: commands.Context, game=None):
         # Validate that we have permissions to access this
-        if not await self.can_access(ctx):
-            raise CommandRunError("`You do not have sufficient privileges to access an inventory for your current state. Either join a game or talk to your guild admin.`")
+        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "inventory", permissions_level=constants.party_member)
+        if not permissions_check:
+            # Ignore the reason as otherwise this will spam
+            return None
 
         # Placeholders
         inventory_id = str(ctx.guild.id)
@@ -89,12 +83,13 @@ class InventoryManager(Module, GameStateListener):
         return inventory
 
     async def save_inventory(self, ctx, inventory):
-        return await self.game_master.save_game_data(ctx, "inventory", "invetory.json", inventory)
+        return await self.game_master.save_game_data(ctx, "inventory", "inventory.json", inventory)
 
     async def unload_inventory(self, ctx: commands.Context, game=None):
         inventory = await self.get_inventory(ctx, game)
-        await self.save_inventory(ctx, inventory)
-        del self.inventories[inventory.get_inventory_id()]
+        if inventory:
+            await self.save_inventory(ctx, inventory)
+            del self.inventories[inventory.get_inventory_id()]
 
     async def game_created(self, ctx, game):
         pass
@@ -102,7 +97,7 @@ class InventoryManager(Module, GameStateListener):
     async def game_started(self, ctx, game):
         await self.get_inventory(ctx)
 
-    async def game_ended(self, ctx, game):
+    async def game_about_to_end(self, ctx, game):
         await self.unload_inventory(ctx, game)
 
     async def game_deleted(self, ctx, game):
@@ -114,26 +109,31 @@ class InventoryManager(Module, GameStateListener):
     """
 
     @commands.command(name="inventory:list")
-    async def _inventory_stash(self, ctx: commands.Context):
+    async def _inventory_list(self, ctx: commands.Context):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this guild!`")
-
-        # Check if we actually have anything
-        if ctx.inventory.size() == 0:
-            return await ctx.send("`Your stash is empty!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Lets just list every item in the inventory!
         await ctx.send("`Your stash contains the following items`")
         async with ctx.typing():
-            for item in ctx.inventory:
-                await ctx.send("`" + str(item) + "`")
+            # Check if we actually have anything
+            if ctx.inventory.size() == 0:
+                await ctx.send("`Your stash is empty!`")
+            else:
+                for item in ctx.inventory:
+                    await ctx.send("`" + str(item) + "`")
+
+            # Always print our currency
+            currency = ctx.inventory.get_currency()
+            for key, value in currency.items():
+                await ctx.send("`" + str(value) + " " + key + "`")
 
     @commands.command(name="inventory:store:gold")
     async def _store_gold(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("gold", amount, 0)
@@ -146,7 +146,7 @@ class InventoryManager(Module, GameStateListener):
     async def _store_silver(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("silver", amount, 0)
@@ -159,7 +159,7 @@ class InventoryManager(Module, GameStateListener):
     async def _store_copper(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("copper", amount, 0)
@@ -172,7 +172,7 @@ class InventoryManager(Module, GameStateListener):
     async def _inventory_store(self, ctx: commands.Context, *, info: str):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Lets parse our arguments
         args = info.split()
@@ -190,7 +190,7 @@ class InventoryManager(Module, GameStateListener):
     async def _inventory_remove(self, ctx: commands.Context, *, info: str):
         # Attempt to load our inventory
         if not ctx.inventory:
-            return await ctx.send("`It looks like you don't have access to any inventories with this game!`")
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Lets parse our arguments
         args = info.split()
@@ -213,7 +213,7 @@ class InventoryManager(Module, GameStateListener):
     async def _inventory_permissions(self, ctx: commands.Context, *, type: int):
         # Validate that we have permissions to access this
         if not ctx.inventory:
-            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
+            return ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running.`")
 
         # Get the game master
         await self.game_master.set_game_permissions_for_context(ctx, "inventory:inventory", type)
@@ -223,12 +223,14 @@ class InventoryManager(Module, GameStateListener):
     async def _inventory_clear(self, ctx: commands.Context):
         # Validate that we have permissions to access this
         if not ctx.inventory:
-            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
+            return ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running.`")
 
         # Extra perms check
-        if not await self.game_master.check_active_game_permissions_for_user(ctx, "inventory:clear", permissions_level=constants.gm):
-            return ctx.send("`You do not have sufficient privileges to access modify the inventory permissions.`")
+        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "inventory:clear", permissions_level=constants.gm)
+        if not permissions_check:
+            return await ctx.send("`" + reason + "`")
 
         # Clear the inventory
         ctx.inventory.clear()
-        return await self.save_inventory(ctx, ctx.inventory)
+        await self.save_inventory(ctx, ctx.inventory)
+        return ctx.send("`The inventory has been cleared.`")

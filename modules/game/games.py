@@ -29,7 +29,7 @@ class Game:
     def is_gm(self, gm_id):
         return str(gm_id) == self.gm_id
 
-    def get_players(self):
+    def get_adventurers(self):
         return self.players
 
     def is_player(self, player_id):

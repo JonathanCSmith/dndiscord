@@ -1,4 +1,5 @@
 import json
+from collections import OrderedDict
 
 
 def convert_to_dict(obj):
@@ -8,10 +9,11 @@ def convert_to_dict(obj):
     """
 
     #  Populate the dictionary with object meta data
-    obj_dict = {
+    obj_dict = OrderedDict()
+    obj_dict.update({
         "__class__": obj.__class__.__name__,
         "__module__": obj.__module__
-    }
+    })
 
     #  Populate the dictionary with object properties
     obj_dict.update(obj.__dict__)
@@ -49,7 +51,7 @@ def dict_to_obj(our_dict):
 
 
 def save(obj, file):
-    data = json.dumps(obj, default=convert_to_dict, indent=4,  sort_keys=True)
+    data = json.dumps(obj, default=convert_to_dict, indent=4)
     with open(file, "w") as json_file:
         json_file.write(data)
 
