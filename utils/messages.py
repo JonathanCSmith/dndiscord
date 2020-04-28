@@ -16,9 +16,14 @@ class LongMessageIterator:
         current_length += 2  # + 1 for the new line that will be added
 
         for i in range(self._current_index, self._message.entries):
+            message_content = self._message.message_contents[i]
+            if message_content is None:
+                self._current_index = i + 1
+                return "`" + "\n".join(this_message) + "`"
+
             length = current_length + self._message.lengths[i] + 1  # For new lines
             if length < self._max_length:
-                this_message.append(self._message.message_contents[i])
+                this_message.append(message_content)
                 current_length = length
 
             else:
@@ -40,10 +45,13 @@ class LongMessage:
         self.entries = 0
 
     def add(self, content):
-        self.message_contents.append(content)
-        length = len(content)
-        self.lengths.append(length)
         self.entries += 1
+        if content is None:
+            self.message_contents.append(None)
+            self.lengths.append(0)
+        else:
+            self.message_contents.append(content)
+            self.lengths.append(len(content))
 
     def __iter__(self):
         return LongMessageIterator(self)

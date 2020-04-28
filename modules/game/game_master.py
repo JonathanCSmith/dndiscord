@@ -120,7 +120,7 @@ class GameMaster(Module):
 
         # This permissions level allows any member of the party to run the command
         if permissions_level >= constants.party_member:
-            if game.is_player(ctx.author.id):
+            if game.is_adventurer(ctx.author.id):
                 return True, ""
 
         # This permissions level only allows for the gm or elevated roles
@@ -284,14 +284,18 @@ class GameMaster(Module):
         await self.manager.save_data_in_data_path_for_guild(ctx, "", "game_master_info.json", guild_data)
         self.guild_data[ctx.guild.id] = guild_data
 
+    @commands.group(name="game")
+    async def _game(self, ctx: commands.Context):
+        # Can this user initiate the call to this command
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master", permissions_level=constants.party_member)
+        if not permissions_check:
+            return await ctx.send("`" + reason + "`")
+
+        game = self.get_active_game_for_context(ctx)
+        return await ctx.send("`You are currently playing in: " + game.get_name() + "`")
+
     @commands.command(name="game:register")
     async def _register_game(self, ctx: commands.Context, *, game_name: str):
-        """
-        Register a new game and activate it in the guild.
-
-        :param ctx:
-        :return:
-        """
         # Can this user initiate the call to this command
         permissions_check, reason = await self.check_guild_permissions_for_user(ctx, "game_master:register", elevated_roles=self.gm_roles)
         if not permissions_check:
@@ -339,10 +343,6 @@ class GameMaster(Module):
         # Set this game as our active game
         self.__set_active_game_for_context(ctx, game)
 
-        # Inform our listeners
-        for listener in self.game_state_listeners:
-            await listener.game_started(ctx, game)
-
         # Inform the channel
         return await ctx.send("`Set the game: " + game_name + " as our active game!`")
 
@@ -371,7 +371,7 @@ class GameMaster(Module):
     @commands.command(name="game:delete")
     async def _delete_game(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        permissions_check, reason = self.check_active_game_permissions_for_user(ctx, "game_master:delete", permissions_level=constants.gm)
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:delete", permissions_level=constants.gm)
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
@@ -380,13 +380,12 @@ class GameMaster(Module):
         if not game:
             return await ctx.send("`There is no game currently running!`")
 
-        # Delete this game
-        await self.__delete_game(ctx, game)
-
         # Inform our listeners
         for listener in self.game_state_listeners:
-            await listener.game_deleted(ctx, game)
+            await listener.game_deleting(ctx, game)
 
+        # Delete this game
+        await self.__delete_game(ctx, game)
         return await ctx.send("`Deleted: " + game.game_name + " and all of it's data.`")
 
     @commands.command(name="game:list")
@@ -483,4 +482,16 @@ class GameMaster(Module):
         async with ctx.typing():
             for index, adventurer in adventurers.items():
                 await ctx.send("`" + adventurer.character_name + " is controlled by: " + adventurer.player_name + "`")
+
+    @commands.command(name="game:pass:day")
+    async def _pass_day(self, ctx: commands.Context):
+        # Can the user initiate a call to this command
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:pass:day", permissions_level=constants.gm)
+        if not permissions_check:
+            return await ctx.send("`" + reason + "`")
+
+        # Check if the player is already a member
+        game = self.get_active_game_for_context(ctx)
+        game.increment_day()
+        await ctx.send("`A new day dawns in : " + game.get_name() + "`")
 

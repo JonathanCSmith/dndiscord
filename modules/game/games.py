@@ -9,15 +9,16 @@ class Adventurer:
 
 
 class Game:
-    def __init__(self, owning_guild, game_name, gm_id, gm_name, players=None, permissions=None):
+    def __init__(self, owning_guild, game_name, gm_id, gm_name, game_days=0, adventurers=None, permissions=None):
         self.owning_guild = owning_guild
         self.game_name = game_name
         self.gm_id = gm_id
         self.gm_name = gm_name
+        self.game_days = game_days
 
-        if not players:
-            players = dict()
-        self.players = players
+        if not adventurers:
+            adventurers = dict()
+        self.adventurers = adventurers
 
         if permissions is None:
             permissions = dict()
@@ -29,14 +30,20 @@ class Game:
     def is_gm(self, gm_id):
         return str(gm_id) == self.gm_id
 
+    def increment_day(self):
+        self.game_days += 1
+
+    def get_days_passed(self):
+        return self.game_days
+
     def get_adventurers(self):
-        return self.players
+        return self.adventurers
 
-    def is_player(self, player_id):
-        return str(player_id) in self.players
+    def is_adventurer(self, player_id):
+        return str(player_id) in self.adventurers
 
-    def add_player(self, player_entry):
-        self.players[str(player_entry.player_id)] = player_entry
+    def add_player(self, adventurer_entry):
+        self.adventurers[str(adventurer_entry.player_id)] = adventurer_entry
 
     def get_permission_level(self, permissions_name):
         if permissions_name is self.permissions:

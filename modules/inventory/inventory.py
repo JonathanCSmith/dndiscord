@@ -1,3 +1,6 @@
+import math
+from collections import OrderedDict
+
 import utils.currency as currency_handler
 
 
@@ -16,7 +19,10 @@ class Inventory:
         self.items = items
 
         if currency is None:
-            currency = {currency_handler.gold_pieces: 0, currency_handler.silver_pieces: 0, currency_handler.copper_pieces: 0}
+            currency = OrderedDict()
+            currency.update({currency_handler.gold_pieces: 0})
+            currency.update({currency_handler.silver_pieces: 0})
+            currency.update({currency_handler.copper_pieces: 0})
         self.currency = currency
 
     def __iter__(self):
@@ -49,6 +55,13 @@ class Inventory:
         weight = 0
         for item in self.items:
             weight += (item.number * item.weight_per_obj)
+
+        # Capture the currency weight
+        total_currency = 0
+        for currency, amount in self.currency.items():
+            total_currency += amount
+        weight += math.ceil(float(total_currency) / 50.0)
+
         return weight
 
     async def remove(self, obj, amount):

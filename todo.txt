@@ -8,9 +8,9 @@
 8) [DONE] Large text implementation
 9) [DONE] Dictionary ordering
 10) [DONE] GM view available upgrades
-11) GM apply available upgrades
-12) Players list staff and GM Staff purchase
-13) GM List contracts and Contract purchase
+11) [DONE] GM apply available upgrades
+12) [DONE] GM List contracts and Contract purchase
+13) [DONE] Players list staff and GM Staff purchase
 14) Tavern test viewable after several purchase types
 15) Tavern test state changes in descriptions
 16) Move to per day sims
@@ -36,19 +36,27 @@ Randoms:
     [DONE] get_purchaseable -> pre genned list
     [DONE] tavern initialize overwrite or fuck up
     [DONE] Tavern data status if data pack not present - just better reporting required telling user that the data pack is missing
+    [DONE] inventory bigger posts
+    [DONE] Tavern() -> apply_history, find_applicable_purchases etc
+    [DONE] on_purchase -> find_applicable_purchases
+    [DONE] Split up tavern status into multiple long messages
+    [DONE] untranslated view for easier pack creation?
+    [DONE] Separate out contracts & purchaseables
+    [DONE] Fix purchase commands
+    [DONE] Property replacement not working
+    [DONE] Property removal not working? Can still buy water upgrade
+    [DONE] currency iteration order
+    [DONE] Initialize remaining days on contract
+    [DONE] currency weight
 
-
-    up enter
-    currency weight
-    currency iteration order
-    tab complete
-    inventory bigger posts
-    move away from stupid prefetch paradigm it messes with our permisson states too much
-    personal inventories
-    more localizations
-    subcommands
-    Split up tavern status into multiple long messages
-    Tavern() -> apply_history, find_applicable_purchases etc
-    on_purchase -> find_applicable_purchases
-    cannot dm on reload_translations
-    untranslated view for easier pack creation?
+    [TODO] up enter
+    [TODO] tab complete
+    [TODO] move away from stupid prefetch paradigm it messes with our permisson states too much
+    [TODO] personal inventories
+    [TODO] more localizations
+    [TODO] cannot dm on reload_translations
+    [TODO] Fantasy Staff names (handbook data pack?)
+    [TODO] More than one business
+    [TODO] Furniture should not be in building, but room props
+    [TODO] Currency as a data pack / integration?
+    [TODO] Calendar + Currency etc in campaign management data pack???!

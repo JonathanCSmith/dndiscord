@@ -1,5 +1,5 @@
-from modules.tavern_simulator.model.data_pack import DataPack, Purchase, Contract, Service, Patron, Staff
-from modules.tavern_simulator.model.new_data_pack import BusinessState, FixedStateAttribute, ModificationAttribute, Purchaseable, Condition
+from modules.tavern_simulator.model.data_pack import Purchase, Contract, Service, Patron, Staff
+from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, FixedAttribute, ModifiesAttribute, Upgrade, Conditional, DataPack
 
 
 def create_new_default_data_pack(path):
@@ -12,75 +12,75 @@ def create_new_default_data_pack(path):
 
 
 def add_initial_tavern_states(data_pack):
-    trollskull_manor_outset = BusinessState("trollskull_manor")
-    trollskull_manor_outset.append_provided(FixedStateAttribute("trollskull_manor_land", "poor"))
-    trollskull_manor_outset.append_provided(FixedStateAttribute("trollskull_manor_land.private_street", "poor"))
-    trollskull_manor_outset.append_provided(FixedStateAttribute("trollskull_manor_land.outdoor_lighting", "poor"))
-    trollskull_manor_outset.append_provided(FixedStateAttribute("trollskull_manor_land.outdoor_signage", "poor"))
+    trollskull_manor_outset = BusinessStateModifier("trollskull_manor")
+    trollskull_manor_outset.append_provided(FixedAttribute("trollskull_manor_land", "poor"))
+    trollskull_manor_outset.append_provided(FixedAttribute("trollskull_manor_land.private_street", "poor"))
+    trollskull_manor_outset.append_provided(FixedAttribute("trollskull_manor_land.outdoor_lighting", "poor"))
+    trollskull_manor_outset.append_provided(FixedAttribute("trollskull_manor_land.outdoor_signage", "poor"))
     data_pack.add_initial(trollskull_manor_outset)
 
-    main_building = BusinessState("trollskull_manor_building")
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.appearance", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.roof.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.attic.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.furnishings.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.windows.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.basement.condition", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.utilities.state", "off"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.roof_slot", "poor"))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.communal_spaces.count", 7))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.rooms.count", 30))
-    main_building.append_provided(FixedStateAttribute("trollskull_manor_building.bathrooms.count", 7))
+    main_building = BusinessStateModifier("trollskull_manor_building")
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.appearance", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.roof.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.attic.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.furnishings.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.windows.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.basement.condition", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.utilities.state", "off"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.roof_slot", "poor"))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.communal_spaces.count", 7))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.rooms.count", 30))
+    main_building.append_provided(FixedAttribute("trollskull_manor_building.bathrooms.count", 7))
     data_pack.add_initial(main_building)
 
     # Add the kitchen and utilities building
-    kitchen_and_utilities_building = BusinessState("kitchen_and_utilities_building")
-    kitchen_and_utilities_building.append_provided(FixedStateAttribute("kitchen_and_utilities_building.condition", "poor"))
-    kitchen_and_utilities_building.append_provided(FixedStateAttribute("kitchen_and_utilities_building.utilities.state", "off"))
+    kitchen_and_utilities_building = BusinessStateModifier("kitchen_and_utilities_building")
+    kitchen_and_utilities_building.append_provided(FixedAttribute("kitchen_and_utilities_building.condition", "poor"))
+    kitchen_and_utilities_building.append_provided(FixedAttribute("kitchen_and_utilities_building.utilities.state", "off"))
     data_pack.add_initial(kitchen_and_utilities_building)
 
     # Add the stable and warehouse building
-    stable_and_warehouse_building = BusinessState("stable_and_warehouse_building")
-    stable_and_warehouse_building.append_provided(FixedStateAttribute("stable_and_warehouse_building.condition", "poor"))
-    stable_and_warehouse_building.append_provided(FixedStateAttribute("stable_and_warehouse_building.utilities.state", "off"))
+    stable_and_warehouse_building = BusinessStateModifier("stable_and_warehouse_building")
+    stable_and_warehouse_building.append_provided(FixedAttribute("stable_and_warehouse_building.condition", "poor"))
+    stable_and_warehouse_building.append_provided(FixedAttribute("stable_and_warehouse_building.utilities.state", "off"))
     data_pack.add_initial(stable_and_warehouse_building)
 
     # Add the garden
-    garden = BusinessState("garden_plots")
-    garden.append_provided(FixedStateAttribute("garden_plots.condition", "poor"))
+    garden = BusinessStateModifier("garden_plots")
+    garden.append_provided(FixedAttribute("garden_plots.condition", "poor"))
     data_pack.add_initial(garden)
 
     return data_pack
 
 
 def add_basic_rebuild_purchases(data_pack):
-    manor_repair = Purchaseable("trollskull_manor_building_repair", 300, 1)
-    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.condition", ""))
-    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.condition", "poor"))
-    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.windows.condition", ""))
-    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.windows.condition", "poor"))
-    manor_repair.append_prerequisite(Condition("has", "trollskull_manor_building.basement.condition", ""))
-    manor_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.basement.condition", "poor"))
-    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.condition", "basic"))
-    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.windows.condition", "basic"))
-    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.basement.condition", "basic"))
-    manor_repair.append_provided(FixedStateAttribute("trollskull_manor_building.appearance", "basic"))
-    data_pack.add_purchaseable(manor_repair)
+    manor_repair = Upgrade("trollskull_manor_building_repair", 300, 1)
+    manor_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.condition", ""))
+    manor_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.condition", "poor"))
+    manor_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.windows.condition", ""))
+    manor_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.windows.condition", "poor"))
+    manor_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.basement.condition", ""))
+    manor_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.basement.condition", "poor"))
+    manor_repair.append_provided(FixedAttribute("trollskull_manor_building.condition", "basic"))
+    manor_repair.append_provided(FixedAttribute("trollskull_manor_building.windows.condition", "basic"))
+    manor_repair.append_provided(FixedAttribute("trollskull_manor_building.basement.condition", "basic"))
+    manor_repair.append_provided(FixedAttribute("trollskull_manor_building.appearance", "basic"))
+    data_pack.add_upgrade(manor_repair)
 
-    roof_repair = Purchaseable("trollskull_manor_building_repair_roof", 300, 1)
-    roof_repair.append_prerequisite(Condition("has", "trollskull_manor_building.attic", ""))
-    roof_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.attic", "poor"))
-    roof_repair.append_prerequisite(Condition("has", "trollskull_manor_building.roof.condition", ""))
-    roof_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.roof.condition", "poor"))
-    roof_repair.append_provided(FixedStateAttribute("trollskull_manor_building.roof.condition", "good"))
-    roof_repair.append_provided(FixedStateAttribute("trollskull_manor_building.attic", "basic"))
-    data_pack.add_purchaseable(roof_repair)
+    roof_repair = Upgrade("trollskull_manor_building_repair_roof", 300, 1)
+    roof_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.attic", ""))
+    roof_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.attic", "poor"))
+    roof_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.roof.condition", ""))
+    roof_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.roof.condition", "poor"))
+    roof_repair.append_provided(FixedAttribute("trollskull_manor_building.roof.condition", "good"))
+    roof_repair.append_provided(FixedAttribute("trollskull_manor_building.attic", "basic"))
+    data_pack.add_upgrade(roof_repair)
 
-    plumbing_repair = Purchaseable("trollskull_manor_building.services.repair", 100, 1)
-    plumbing_repair.append_prerequisite(Condition("equals", "trollskull_manor_building.services.state", "off"))
-    plumbing_repair.append_provided(FixedStateAttribute("trollskull_manor_building.services.state", "on"))
-    data_pack.add_purchaseable(plumbing_repair)
+    plumbing_repair = Upgrade("trollskull_manor_building.services.repair", 100, 1)
+    plumbing_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.utilities.state", "off"))
+    plumbing_repair.append_provided(FixedAttribute("trollskull_manor_building.utilities.state", "on"))
+    data_pack.add_upgrade(plumbing_repair)
 
     return data_pack
 
@@ -152,17 +152,17 @@ def add_rebuilds_from_disrepair(data_pack):
     manor_repair.append_provided("main_state", "basic")
     manor_repair.append_provided("main_glazing", "shutters")
     manor_repair.append_provided("main_basement", "small_sturdy")
-    data_pack.add_purchaseable(manor_repair)
+    data_pack.add_upgrade(manor_repair)
 
     roof_repair = Purchase("main_building_roof_repair", 300)
     roof_repair.append_prerequisite("main_roof", "leaky")
     roof_repair.append_provided("main_roof", "repaired")
-    data_pack.add_purchaseable(roof_repair)
+    data_pack.add_upgrade(roof_repair)
 
     plumbing_repair = Purchase("plumbing_repair", 100)
     plumbing_repair.append_prerequisite("main_water_services", "non_functional")
     plumbing_repair.append_provided("main_water_services", "functional")
-    data_pack.add_purchaseable(plumbing_repair)
+    data_pack.add_upgrade(plumbing_repair)
 
     return data_pack
 
@@ -232,7 +232,7 @@ def add_basic_drinks_service(data_pack):
     basic_tap_room.append_provided(commoner.get_mean_patron_occupancy_additive_tag(), 10)
     basic_tap_room.append_provided(rough.get_mean_patron_occupancy_additive_tag(), 2)
     basic_tap_room.append_provided(Patron.maximum_occupancy_limit_tag, 50)
-    data_pack.add_purchaseable(basic_tap_room)
+    data_pack.add_upgrade(basic_tap_room)
 
     basic_basement_storeroom = Purchase("basic_basement_storeroom", 50)
     basic_basement_storeroom.append_precluded_by("main_basement", "crumbling_and_unsafe")

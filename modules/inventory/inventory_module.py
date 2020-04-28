@@ -8,6 +8,7 @@ from modules.inventory.inventory import Inventory
 from utils import constants
 from utils.currency import CurrencyError
 from utils.errors import CommandRunError
+from utils.messages import LongMessage
 
 """
 TODO: Personal Inventory Support
@@ -100,7 +101,7 @@ class InventoryManager(Module, GameStateListener):
     async def game_about_to_end(self, ctx, game):
         await self.unload_inventory(ctx, game)
 
-    async def game_deleted(self, ctx, game):
+    async def game_deleting(self, ctx, game):
         # TODO: DELETE DATA
         await self.unload_inventory(ctx, game)
 
@@ -108,26 +109,32 @@ class InventoryManager(Module, GameStateListener):
     COMMANDS SECTION
     """
 
-    @commands.command(name="inventory:list")
+    @commands.command(name="inventory")
     async def _inventory_list(self, ctx: commands.Context):
         # Attempt to load our inventory
         if not ctx.inventory:
             return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
         # Lets just list every item in the inventory!
-        await ctx.send("`Your stash contains the following items`")
-        async with ctx.typing():
-            # Check if we actually have anything
-            if ctx.inventory.size() == 0:
-                await ctx.send("`Your stash is empty!`")
-            else:
-                for item in ctx.inventory:
-                    await ctx.send("`" + str(item) + "`")
+        await ctx.send("`Your stash contains the following items:`")
+        long_message = LongMessage()
+        # Check if we actually have anything
+        if ctx.inventory.size() == 0:
+            long_message.add("\tYour inventory is empty!")
+        else:
+            for item in ctx.inventory:
+                long_message.add("\t" + str(item))
 
-            # Always print our currency
-            currency = ctx.inventory.get_currency()
-            for key, value in currency.items():
-                await ctx.send("`" + str(value) + " " + key + "`")
+        # Always print our currency
+        currency = ctx.inventory.get_currency()
+        long_message.add(None)
+        long_message.add("Your purse has the following coinage:")
+        for key, value in currency.items():
+            long_message.add("\t" + str(value) + " " + key)
+
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.send(message)
 
     @commands.command(name="inventory:store:gold")
     async def _store_gold(self, ctx: commands.Context, *, amount: int):
