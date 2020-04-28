@@ -89,10 +89,13 @@ class TavernSimulator(Module):
         pass
 
     async def game_started(self, ctx, game):
-        # TODO: Race condition between loading tavern and data packs
-        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern", None)
-        if tavern is not None:
+        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern")
+        if isinstance(tavern, str):
+            return ctx.send(tavern)
+
+        elif tavern:
             await self.set_tavern_for_context(ctx, tavern)
+            return ctx.send("`Loaded a tavern for your game!`")
 
     async def game_about_to_end(self, ctx, game):
         await self.unload_tavern_for_context(ctx, game)
@@ -128,7 +131,15 @@ class TavernSimulator(Module):
         if not ctx.author.guild_permissions.administrator:
             await ctx.send("`Only the administrator can use this command as its for development purposes only.`")
 
-        await self._get_data_pack(ctx, "FORCE")
+        data_pack = await self._get_data_pack(ctx, "FORCE")
+
+        # Check if we have a tavern here!
+        tavern = await self.get_tavern_for_context(ctx)
+        if tavern:
+            old_data_pack = tavern.get_data_pack()
+            if old_data_pack.get_name() == data_pack.get_name() and old_data_pack.get_path() == data_pack.get_path():
+                await tavern.refresh_data_pack(data_pack)
+
         await ctx.send("`Default data pack reloaded`")
 
     @commands.command(name="tavern:force_reload")
@@ -160,6 +171,15 @@ class TavernSimulator(Module):
         if tavern:
             return await ctx.send("`There is already a tavern operating in your current game!`")
 
+        # Try and load the tavern to make sure that it doesnt exist as a file
+        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern")
+        if isinstance(tavern, str):
+            return ctx.send(tavern)
+
+        elif tavern:
+            await self.set_tavern_for_context(ctx, tavern)
+            return ctx.send("`There is already tavern data present in this game. Loading it instead.`")
+
         # Look for a data pack base on our input.
         data_pack = await self._get_data_pack(ctx, pack)
 
@@ -168,7 +188,7 @@ class TavernSimulator(Module):
             return await ctx.send("`No data pack could be loaded!`")
 
         # Create a tavern
-        tavern = await Tavern.load_tavern(self.manager, self.game_master, ctx, "tavern", data_pack)
+        tavern = await Tavern.create_tavern(self.manager, self.game_master, ctx, "tavern", data_pack)
         await self.set_tavern_for_context(ctx, tavern)
         return await ctx.send("`Successfully created a tavern for your adventuring party!`")
 

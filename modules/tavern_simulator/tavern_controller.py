@@ -16,37 +16,30 @@ TODO: When saving the state it may be worth remembering who edited it somehow? s
 # Design goal: Simulate a week (tenday) for a D&D Tavern!
 class Tavern:
     @classmethod
-    async def load_tavern(cls, manager, game_master, ctx, path_modifier, data_pack=None):
-        tavern_status = None
-        if game_master and ctx:
-            tavern_status = await game_master.load_game_data(ctx, path_modifier, "tavern.json")
-
-        # Ensure we have a data pack when creating the tavern for the first time
-        if not tavern_status and not data_pack:
-            return None
-
-        # Now we should load our relevant data pack into mem
-        if not data_pack:
-            data_pack = await DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
-
-        if not data_pack:
-            return None
-
-        # Create our tavern
-        tavern = Tavern(data_pack, tavern_status=tavern_status)
-
-        # If its empty the new tavern would have created a tavern state, so we should save it to disk
-        if not tavern_status:
-            await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
-
+    async def create_tavern(cls, manager, game_master, ctx, path_modifier, data_pack):
+        tavern = Tavern()
+        await tavern.set_data_pack(data_pack)
+        await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
         return tavern
 
-    def __init__(self, data_pack, tavern_status=None):
-        self.data_pack = data_pack
+    @classmethod
+    async def load_tavern(cls, manager, game_master, ctx, path_modifier):
+        # Load our tavern data
+        tavern_status = await game_master.load_game_data(ctx, path_modifier, "tavern.json")
+        if not tavern_status:
+            return None
 
-        # The business state descriptors
-        self.properties = dict()
-        self.current_purchaseables = list()  # TODO Change this name
+        data_pack = await DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
+        if not data_pack:
+            return "`Could not load the data pack`"
+
+        # Create our tavern
+        tavern = Tavern(tavern_status=tavern_status)
+        await tavern.set_data_pack(data_pack)
+        return tavern
+
+    def __init__(self, tavern_status=None):
+        self.data_pack = None
 
         # Create if new
         if not tavern_status:
@@ -54,15 +47,9 @@ class Tavern:
         else:
             self.tavern_status = tavern_status
 
-        # TODO: This should only be when creating status so we dont dupe
-        # Apply the data pack's initial? TODO: Move to a func somewhere
-        initials = self.data_pack.get_initial()
-        for key, initial in initials.items():
-            self.apply_state(initial)
-
-        # Get all of our possible things we could apply
-        # TODO: This is currently only purchaseables
-        self.add_all_current_purchaseables()
+        # The business state descriptors
+        self.properties = dict()
+        self.current_purchaseables = list()  # TODO Change this name
 
         # Current non-serialized properties
         self.provided = dict()
@@ -106,17 +93,28 @@ class Tavern:
         else:
             raise RuntimeError("You haven't implemented this yet.")
 
-    async def refresh_data_pack(self, data_pack):
-        self.__init__(data_pack, self.tavern_status)
+    async def set_data_pack(self, data_pack):
+        self.properties.clear()
+        self.current_purchaseables.clear()
 
-    def add_all_current_purchaseables(self):
+        # TODO: This should only be when creating status so we dont dupe
+        # Apply the data pack's initial? TODO: Move to a func somewhere
+        initials = self.data_pack.get_initial()
+        for key, initial in initials.items():
+            await self.apply_state(initial)
+
+        # Get all of our possible things we could apply
+        # TODO: This is currently only purchaseables
+        await self.add_all_current_purchaseables()
+
+    async def add_all_current_purchaseables(self):
         self.current_purchaseables.clear()
         all_purchaseables = self.data_pack.get_purchaseables()
         for purchaseable in all_purchaseables:
-            if self.can_apply(purchaseable):
+            if await self.can_apply(purchaseable):
                 self.current_purchaseables.append(purchaseable)
 
-    def can_apply(self, appliable):
+    async def can_apply(self, appliable):
         # Gather the prerequisites
         prerequisites = appliable.get_prerequisites()
         for prerequisite in prerequisites.values():
@@ -212,7 +210,7 @@ class Tavern:
         self.tavern_status.purchase(purchase)
         self.apply_state(purchase)
 
-    def apply_state(self, state: BusinessState):
+    async def apply_state(self, state: BusinessState):
         # TODO: Check requirements
         for key, attribute in state.provides.items():
             self.apply_attribute(attribute)

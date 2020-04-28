@@ -7,44 +7,47 @@
 7) [DONE] Translations implementation
 8) [DONE] Large text implementation
 9) [DONE] Dictionary ordering
-10) GM view available upgrades
+10) [DONE] GM view available upgrades
 11) GM apply available upgrades
 12) Players list staff and GM Staff purchase
-13) GM Contract purchase
+13) GM List contracts and Contract purchase
 14) Tavern test viewable after several purchase types
 15) Tavern test state changes in descriptions
-16) Tavern test basic simulations
-17) Tavern -> business impact assessment
-18) Calendar
-19) Game Channels
-20) Handbook implementation - data pack and query interface (users & api)
-21) Game data implementation - Calendar, Currency, "Rations", data tagging
+16) Move to per day sims
+17) Tavern test basic simulations
+18) Tavern -> business impact assessment
+19) Calendar
+20) Game Channels
+21) Handbook implementation - data pack and query interface (users & api)
+22) Game data implementation - Calendar, Currency, "Rations", data tagging
     (i.e. how does rest module know what to look for in inventory module
      in order to assess whether the adventurers have enough food)
 
 Randoms:
 
     [DONE] game:run tes didnt work for me
-    tavern initialize overwrite or fuck up
     [DONE] check permission should output True or reason
+    [DONE] tavern bigger posts
+    [DONE] water.state should just be services I think - I don't want to micro plumbing etc
+    [DONE] conflation of land and garden properties in data pack
+    [DONE] Tavern force change datapack? Should help with loading new versions?!
+    [DONE] If i make a change to default data pack i would like to re-dump it into default with a command
+    [DONE] Fix force reload so it doesnt load the default pack if it cant find the original
+    [DONE] get_purchaseable -> pre genned list
+    [DONE] tavern initialize overwrite or fuck up
+    [DONE] Tavern data status if data pack not present - just better reporting required telling user that the data pack is missing
+
+
     up enter
     currency weight
     currency iteration order
     tab complete
-    [DONE] tavern bigger posts
     inventory bigger posts
     move away from stupid prefetch paradigm it messes with our permisson states too much
     personal inventories
     more localizations
     subcommands
-    [DONE] water.state should just be services I think - I don't want to micro plumbing etc
-    [DONE] conflation of land and garden properties in data pack
-    Tavern data status if data pack not present - just better reporting required telling user that the data pack is missing
-    [DONE] Tavern force change datapack? Should help with loading new versions?!
-    [DONE] If i make a change to default data pack i would like to re-dump it into default with a command
-    [DONE] Fix force reload so it doesnt load the default pack if it cant find the original
     Split up tavern status into multiple long messages
-    get_purchaseable -> pre genned list
     Tavern() -> apply_history, find_applicable_purchases etc
     on_purchase -> find_applicable_purchases
     cannot dm on reload_translations
