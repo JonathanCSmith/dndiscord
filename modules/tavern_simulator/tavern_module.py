@@ -123,7 +123,7 @@ class TavernSimulator(Module):
         # If its still not full we can dump our code based one to file and use that
         if data_pack is None or pack_name == "FORCE":
             await ctx.send("`Using the in code data pack.`")
-            data_pack = default_data_pack.create_new_default_data_pack(data_packs_path)
+            data_pack = default_data_pack.create_default_data_pack(data_packs_path)
             await data_pack.save(self.manager, ctx)
 
         return data_pack
@@ -316,7 +316,7 @@ class TavernSimulator(Module):
             return await ctx.send("`There is no tavern being operated in your game!`")
 
         # Get the results to post
-        purchaseable = tavern.get_purchaseable()
+        purchaseable = tavern.get_upgradeable()
 
         # Create an output message
         long_message = LongMessage()
@@ -329,7 +329,7 @@ class TavernSimulator(Module):
             purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, purchaseable.get_key())
             long_message.add("Upgrade: " + purchaseable.get_key())
             long_message.add(" ")
-            long_message.add(purchaseable_name + " can be purchased for " + str(purchaseable.cost) + " gold and will take " + str(purchaseable.duration) + " days to construct")
+            long_message.add(purchaseable_name + " can be purchased for " + str(float(purchaseable.cost) / 100.0) + " gold and will take " + str(purchaseable.duration) + " days to construct")
             long_message.add(" ")
 
         # Output
@@ -358,10 +358,10 @@ class TavernSimulator(Module):
         # Apply the purchase
         if await tavern.apply_upgrade(item, amount):
             await self.set_tavern_for_context(ctx, tavern)
-            return await ctx.send("`The upgrade has been applied!`")
+            return await ctx.send("`The upgrade has been purchased!`")
 
         else:
-            return await ctx.send("`The upgrade could not be applied.`")
+            return await ctx.send("`The upgrade could not be purchased.`")
 
     @commands.command(name="tavern:purchaseable_contracts")
     async def _purchaseable_contracts(self, ctx: commands):
@@ -376,7 +376,7 @@ class TavernSimulator(Module):
             return await ctx.send("`There is no tavern being operated in your game!`")
 
         # Get the results to post
-        contractables = tavern.get_contracts()
+        contractables = tavern.get_contractable()
 
         # Create an output message
         long_message = LongMessage()
@@ -389,7 +389,7 @@ class TavernSimulator(Module):
             purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, contract.get_key())
             long_message.add("Contract: " + contract.get_key())
             long_message.add(" ")
-            long_message.add(purchaseable_name + " can be purchased for " + str(contract.cost) + " gold and will last for  " + str(contract.duration) + " days.")
+            long_message.add(purchaseable_name + " can be purchased for " + str(float(contract.cost) / 100.0) + " gold and will last for  " + str(contract.duration) + " days.")
             long_message.add(" ")
 
         # Output

@@ -25,7 +25,7 @@ class FixedAttribute(Attribute):
 
 
 class ModifiesAttribute(Attribute):
-    types = ["add", "subtract", "multiply", "divide"]
+    types = ["add", "subtract", "multiply", "divide", "set_upper_bound"]
 
     def __init__(self, attribute_key, attribute_value, modification_type):
         super().__init__(attribute_key, attribute_value)
@@ -33,6 +33,9 @@ class ModifiesAttribute(Attribute):
         if modification_type not in ModifiesAttribute.types:
             raise RuntimeError("Poor modification type for ModificationAttribute: " + self.attribute_key + " and value " + str(self.attribute_value))
         self.modification_type = modification_type
+
+    def get_type(self):
+        return self.modification_type
 
 
 class Conditional(Attribute):
@@ -108,6 +111,65 @@ class Employee(BusinessStateModifier):
         self.cost_per_day = cost_per_day
 
 
+class ServiceOffered(BusinessStateModifier):
+    def __init__(self, unique_key, cost_price, sale_price, cost_value_modifiers=None, sale_value_modifiers=None, requirements=None, provides=None):
+        super().__init__(unique_key, requirements=requirements, provides=provides)
+
+        self.cost_price = cost_price
+        self.sale_price = sale_price
+
+        if cost_value_modifiers is None:
+            cost_value_modifiers = list()
+        self.cost_value_modifiers = ["all_unit_costs_modifier", self.unique_key + "_unit_costs_modifier"]
+        for item in cost_value_modifiers:
+            if item not in self.cost_value_modifiers:
+                self.cost_value_modifiers.append(item)
+
+        if sale_value_modifiers is None:
+            sale_value_modifiers = list()
+        self.sale_value_modifiers = ["all_unit_sales_modifier", self.unique_key + "_unit_sales_modifier"]
+        for item in sale_value_modifiers:
+            if item not in self.sale_value_modifiers:
+                self.sale_value_modifiers.append(item)
+
+
+class Customer(BusinessStateModifier):
+    def __init__(self, unique_key, customer_tier, popularity_modifiers=None, occupancy_modifiers=None, services_consumed=None, requirements=None, provides=None):
+        super().__init__(unique_key, requirements=requirements, provides=provides)
+
+        self.customer_tier = customer_tier
+
+        if services_consumed is None:
+            services_consumed = dict()
+        self.services_consumed = services_consumed
+
+        if popularity_modifiers is None:
+            popularity_modifiers = list()
+        self.popularity_modifiers = ["all_popularity_modifier", self.unique_key + "_popularity_modifier"]
+        for item in popularity_modifiers:
+            if item not in self.popularity_modifiers:
+                self.popularity_modifiers.append(item)
+
+        if occupancy_modifiers is None:
+            occupancy_modifiers = list()
+        self.occupancy_modifiers = ["all_customers_maximum_occupancy_modifier", self.unique_key + "_maximum_occupancy_modifier"]
+        for item in occupancy_modifiers:
+            if item not in self.occupancy_modifiers:
+                self.occupancy_modifiers.append(item)
+
+    def add_consumed_service(self, key, amount):
+        if key in self.services_consumed:
+            self.services_consumed[key] += amount
+        else:
+            self.services_consumed[key] = amount
+
+    def get_popularity_modifier(self):
+        return self.popularity_modifiers
+
+    def get_maximum_occupancy_modifiers(self):
+        return self.occupancy_modifiers
+
+
 class DataPackData:
     def __init__(self, pack_name, business_name, description):
         self.pack_name = pack_name
@@ -172,7 +234,7 @@ class DataPack:
 
         if not staff:
             staff = OrderedDict()
-        self.staff = staff
+        self.employee = staff
 
         if not contracts:
             contracts = OrderedDict()
@@ -205,14 +267,14 @@ class DataPack:
     def add_initial(self, obj):
         self.initial[obj.unique_key] = obj
 
-    def get_staff_archetypes(self):
-        return self.staff.values()
+    def get_employee_archetypes(self):
+        return self.employee.values()
 
-    def get_staff_archetype(self, key):
-        return self.staff[key]
+    def get_employee_archetype(self, key):
+        return self.employee[key]
 
-    def add_staff_archetype(self, staff):
-        self.staff[staff.unique_key] = staff
+    def add_employee_archetype(self, staff):
+        self.employee[staff.unique_key] = staff
 
     def get_upgrades(self):
         return self.upgrades.values()
@@ -224,7 +286,7 @@ class DataPack:
         self.upgrades[purchaseable.unique_key] = purchaseable
 
     def get_contracts(self):
-        return self.contracts
+        return self.contracts.values()
 
     def get_contract(self, contract):
         return self.contracts[contract]
@@ -241,13 +303,13 @@ class DataPack:
     def add_service(self, service):
         self.services[service.unique_key] = service
 
-    def get_patron(self, key):
+    def get_customer_archetype(self, key):
         return self.patrons[key]
 
-    def get_patrons(self):
+    def get_customers(self):
         return self.patrons.values()
 
-    def add_patron(self, patron):
+    def add_customer(self, patron):
         self.patrons[patron.unique_key] = patron
 
     async def save(self, manager=None, ctx=None):
@@ -256,7 +318,7 @@ class DataPack:
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "data_pack.json", self.data_pack_data)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "initial.json", self.initial)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "services.json", self.services)
-            await manager.save_data_in_data_path_for_guild(ctx, save_path, "staff.json", self.staff)
+            await manager.save_data_in_data_path_for_guild(ctx, save_path, "staff.json", self.employee)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "patrons.json", self.patrons)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "purchaseable.json", self.upgrades)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "contracts.json", self.contracts)
@@ -264,7 +326,7 @@ class DataPack:
             await manager.save_data_in_data_path(save_path, "data_pack.json", self.data_pack_data)
             await manager.save_data_in_data_path(save_path, "initial.json", self.initial)
             await manager.save_data_in_data_path(save_path, "services.json", self.services)
-            await manager.save_data_in_data_path(save_path, "staff.json", self.staff)
+            await manager.save_data_in_data_path(save_path, "staff.json", self.employee)
             await manager.save_data_in_data_path(save_path, "patrons.json", self.patrons)
             await manager.save_data_in_data_path(save_path, "purchaseable.json", self.upgrades)
             await manager.save_data_in_data_path(save_path, "contracts.json", self.contracts)

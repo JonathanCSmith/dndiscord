@@ -1,13 +1,5 @@
-import os
-
-from scipy import stats
-
-from modules.tavern_simulator.model import new_data_pack
-from modules.tavern_simulator.model.data_pack import Patron, Purchase, Staff
-from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, Attribute, FixedAttribute, DataPack, Employee, Upgrade, Contract
-from modules.tavern_simulator.model.outcomes import Sale
+from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, FixedAttribute, DataPack, Employee, Upgrade, Contract
 from modules.tavern_simulator.model.tavern import TavernStatus, EmployeeEntry, ContractEntry
-from utils import math
 
 """
 TODO: When saving the state it may be worth remembering who edited it somehow? so that if we block an upgrade mid path we can remove all relevant upgrades...
@@ -161,7 +153,7 @@ class Tavern:
             if await self.__can_apply(purchaseable):
                 self.possible_upgrades[purchaseable.unique_key] = purchaseable
 
-        all_purchaseables = self.data_pack.get_staff_archetypes()
+        all_purchaseables = self.data_pack.get_employee_archetypes()
         for purchaseable in all_purchaseables:
             if await self.__can_apply(purchaseable):
                 self.possible_staff_types[purchaseable.unique_key] = purchaseable
@@ -219,7 +211,7 @@ class Tavern:
 
     async def __hire_employee(self, name, staff, daily_cost):
         if not isinstance(staff, Employee):
-            staff = self.data_pack.get_staff_archetype(staff)
+            staff = self.data_pack.get_employee_archetype(staff)
         await self.__apply_state(staff)
         self.active_staff.append(StaffMember(name, staff, daily_cost))
 
@@ -329,7 +321,39 @@ class Tavern:
         if isinstance(attribute, FixedAttribute):
             self.properties[attribute.get_key()] = attribute.get_value()
         else:
-            raise RuntimeError("You havent made this yet")
+            if attribute.get_key() not in self.properties[attribute.get_key()]:
+                self.properties[attribute.get_key()] = attribute.get_value()
+                return
+
+            # Depending on our type.
+            type = attribute.get_type()
+            current_val = self.properties[attribute.get_key()]
+
+            # We can count this as being empty
+            if current_val == "":
+                self.properties[attribute.get_key()] = attribute.get_value()
+                return
+
+            # Throw an error
+            if isinstance(current_val, str):
+                raise RuntimeError("Cannot modify a string value of a property")
+
+            # Get it as a float
+            current_val = float(current_val)
+            modifying_val = float(attribute.get_value())
+            if type == "add":
+                current_val += modifying_val
+            elif type == "subtract":
+                current_val -= modifying_val
+            elif type == "multiply":
+                current_val *= modifying_val
+            elif type == "divide":
+                current_val /= modifying_val
+            elif type == "set_upper_bound":
+                if current_val > modifying_val:
+                    current_val = modifying_val
+
+            self.properties[attribute.get_key()] = current_val
 
     """
     OLD ZONE IS BELOW

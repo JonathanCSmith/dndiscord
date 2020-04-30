@@ -11,3 +11,8 @@ def find_urls(string):
 def get_trailing_number(s):
     m = re.search(r'\d+$', s)
     return int(m.group()) if m else None
+
+
+def replace_count_reverse(source, target, replacement, count):
+    li = source.rsplit(target, count)
+    return replacement.join(li)

@@ -1,12 +1,17 @@
-from modules.tavern_simulator.model.data_pack import Purchase, Contract, Service, Patron, Staff
-from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, FixedAttribute, ModifiesAttribute, Upgrade, Conditional, DataPack
+from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, FixedAttribute, ModifiesAttribute, Upgrade, Conditional, DataPack, ServiceOffered, Customer, Employee, Contract
 
 
-def create_new_default_data_pack(path):
+def create_default_data_pack(path):
     data_pack = DataPack("default_data_pack", path, False, business_name="business.trollskull_manor", description="business.trollskull_manor.description")
 
     data_pack = add_initial_tavern_states(data_pack)
     data_pack = add_basic_rebuild_purchases(data_pack)
+
+    # Tier 1
+    data_pack = add_services(data_pack)
+    data_pack = add_customers(data_pack)
+    data_pack = add_employees(data_pack)
+    data_pack = add_basic_drinks_prerequisites(data_pack)
 
     return data_pack
 
@@ -55,7 +60,7 @@ def add_initial_tavern_states(data_pack):
 
 
 def add_basic_rebuild_purchases(data_pack):
-    manor_repair = Upgrade("trollskull_manor_building_repair", 300, 1)
+    manor_repair = Upgrade("trollskull_manor_building_repair", 30000, 1)
     manor_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.condition", ""))
     manor_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.condition", "poor"))
     manor_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.windows.condition", ""))
@@ -68,7 +73,7 @@ def add_basic_rebuild_purchases(data_pack):
     manor_repair.append_provided(FixedAttribute("trollskull_manor_building.appearance", "basic"))
     data_pack.add_upgrade(manor_repair)
 
-    roof_repair = Upgrade("trollskull_manor_building_repair_roof", 300, 1)
+    roof_repair = Upgrade("trollskull_manor_building_repair_roof", 30000, 1)
     roof_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.attic", ""))
     roof_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.attic", "poor"))
     roof_repair.append_prerequisite(Conditional("has", "trollskull_manor_building.roof.condition", ""))
@@ -77,7 +82,7 @@ def add_basic_rebuild_purchases(data_pack):
     roof_repair.append_provided(FixedAttribute("trollskull_manor_building.attic", "basic"))
     data_pack.add_upgrade(roof_repair)
 
-    plumbing_repair = Upgrade("trollskull_manor_building.services.repair", 100, 1)
+    plumbing_repair = Upgrade("trollskull_manor_building.services.repair", 10000, 1)
     plumbing_repair.append_prerequisite(Conditional("equals", "trollskull_manor_building.utilities.state", "off"))
     plumbing_repair.append_provided(FixedAttribute("trollskull_manor_building.utilities.state", "on"))
     data_pack.add_upgrade(plumbing_repair)
@@ -85,219 +90,122 @@ def add_basic_rebuild_purchases(data_pack):
     return data_pack
 
 
-def create_default_data_pack(path):
-    data_pack = DataPack("default_data_pack", path, False, business_name="Trollskull Manor", description="Trollskull Manor Description")
-
-    # Default data
-    data_pack = add_initial_tavern_state(data_pack)
-    data_pack = add_rebuilds_from_disrepair(data_pack)
-    data_pack = add_tier_1_service(data_pack)
-    data_pack = add_patrons(data_pack)
-    data_pack = add_staff(data_pack)
-    data_pack = add_basic_drinks_service(data_pack)
-
-    return data_pack
-
-
-def add_initial_tavern_state(data_pack):
-    # Add the initial plot of land in
-    land = Purchase("trollskull_manor", 0)
-    land.append_provided("main_building", "YES")
-    land.append_provided("kitchen_and_utilities_building", "YES")
-    land.append_provided("stables_and_storage_building", "YES")
-    land.append_provided("garden", "YES")
-    data_pack.add_initial(land)
-
-    # Add the manor building
-    manor_building = Purchase("main_building", 0)
-    manor_building.append_provided("main_state", "dilapidated")
-    manor_building.append_provided("main_roof", "leaky")
-    manor_building.append_provided("main_furnishings", "destroyed")
-    manor_building.append_provided("main_glazing", "broken_shutters_only")
-    manor_building.append_provided("main_basement", "crumbling_and_unsafe")
-    manor_building.append_provided("main_water_services", "non_functional")
-    data_pack.add_initial(manor_building)
-
-    # Add the kitchen and utilities building
-    kitchen_and_utilities_building = Purchase("kitchen_and_utilities_building", 0)
-    kitchen_and_utilities_building.append_provided("kitchen_and_utilities_state", "collapsed")
-    kitchen_and_utilities_building.append_provided("kitchen_and_utilities_water_services", "non_functional")
-    data_pack.add_initial(kitchen_and_utilities_building)
-
-    # Add the stable and warehouse building
-    stable_and_warehouse_building = Purchase("stable_and_warehouse_building", 0)
-    stable_and_warehouse_building.append_provided("stable_and_warehouse_state", "collapsed")
-    stable_and_warehouse_building.append_provided("stable_and_warehouse_water_services", "non_functional")
-    data_pack.add_initial(stable_and_warehouse_building)
-
-    # Add the garden
-    garden = Purchase("garden", 0)
-    garden.append_provided("garden_state", "overgrown")
-    data_pack.add_initial(garden)
-
-    return data_pack
-
-
-"""
-"""
-
-
-def add_rebuilds_from_disrepair(data_pack):
-    """
-    """
-    manor_repair = Purchase("main_building_repair_full", 300)
-    manor_repair.append_prerequisite("main_state", "dilapidated")
-    manor_repair.append_prerequisite("main_glazing", "broken_shutters_only")
-    manor_repair.append_prerequisite("main_basement", "crumbling_and_unsafe")
-    manor_repair.append_provided("main_state", "basic")
-    manor_repair.append_provided("main_glazing", "shutters")
-    manor_repair.append_provided("main_basement", "small_sturdy")
-    data_pack.add_upgrade(manor_repair)
-
-    roof_repair = Purchase("main_building_roof_repair", 300)
-    roof_repair.append_prerequisite("main_roof", "leaky")
-    roof_repair.append_provided("main_roof", "repaired")
-    data_pack.add_upgrade(roof_repair)
-
-    plumbing_repair = Purchase("plumbing_repair", 100)
-    plumbing_repair.append_prerequisite("main_water_services", "non_functional")
-    plumbing_repair.append_provided("main_water_services", "functional")
-    data_pack.add_upgrade(plumbing_repair)
-
-    return data_pack
-
-
-def add_tier_1_service(data_pack):
-    # Offer basic drinks
-    basic_drinks_key_vals = dict()
-    basic_drinks_key_vals["store_basic_drinks"] = "YES"
-    basic_drinks_key_vals["sell_basic_drinks"] = "YES"
-    basic_drinks_key_vals["serve_basic_drinks"] = "YES"
-    basic_drinks_key_vals["supply_basic_drinks"] = "YES"
-    basic_drinks = Service("basic_drinks", 1, 2, prerequisites=basic_drinks_key_vals)
+def add_services(data_pack):
+    basic_drinks = ServiceOffered("basic_drinks", 1, 2, cost_value_modifiers=["drinks_unit_cost_modifier"], sale_value_modifiers=["drinks_unit_sales_modifier"])
+    basic_drinks.append_prerequisite(Conditional("has", "basic_drinks_supplied", ""))
+    basic_drinks.append_prerequisite(Conditional("has", "basic_drinks_stored", ""))
+    basic_drinks.append_prerequisite(Conditional("has", "basic_drinks_sold", ""))
+    basic_drinks.append_prerequisite(Conditional("has", "basic_drinks_served", ""))
     data_pack.add_service(basic_drinks)
-
     return data_pack
 
 
-def add_patrons(data_pack):
-    # Need to reference some things
-    basic_drinks = data_pack.get_service("basic_drinks")
+def add_customers(data_pack):
+    commoner_patron = Customer("common_patron", 2)
+    commoner_patron.add_consumed_service("basic_drinks", 5)
+    data_pack.add_customer(commoner_patron)
 
-    # Prebuilt patrons
-    commoner_patron = Patron("common_patron", 2, {basic_drinks.name: 5})
-    data_pack.add_patron(commoner_patron)
-    rough_patron = Patron("rough_patron", 1, {basic_drinks.name: 3})
-    data_pack.add_patron(rough_patron)
-
+    rough_patron = Customer("rough_patron", 1)
+    rough_patron.add_consumed_service("basic_drinks", 3)
+    data_pack.add_customer(rough_patron)
     return data_pack
 
 
-def add_staff(data_pack):
-    # Need to reference some things
-    commoner = data_pack.get_patron("common_patron")
-    rough = data_pack.get_patron("rough_patron")
-
-    barstaff = Staff("barstaff", 1)
-    barstaff.append_prerequisite("taproom", "YES")
-    barstaff.append_provided("maximum_patrons_served", 100)
-    barstaff.append_provided(commoner.get_mean_patron_occupancy_multiplier_tag(), 1.1)
-    barstaff.append_provided(rough.get_mean_patron_occupancy_multiplier_tag(), 1.2)
-    barstaff.append_provided("maintenance_modifier", 1.1)
-    barstaff.append_provided("modify_tip_rate", 1.1)
-    barstaff.append_provided("serve_basic_drinks", "YES")
-    barstaff.append_provided("barstaff", "YES")
-    data_pack.add_staff_archetype(barstaff)
-
-    return data_pack
-
-
-def add_basic_drinks_service(data_pack):
+def add_employees(data_pack):
+    barstaff = Employee("barstaff", 10)
+    barstaff.append_prerequisite(Conditional("has", "taproom", ""))
+    barstaff.append_provided(ModifiesAttribute("basic_drinks_served", 80, "add"))
+    barstaff.append_provided(FixedAttribute("barstaff", ""))
+    # TODO: When we know how these tags are going to work:
     """
+    maintenance
+    tip rate
     """
+    data_pack.add_employee_archetype(barstaff)
 
-    # Need to reference some things
-    commoner = data_pack.get_patron("common_patron")
-    rough = data_pack.get_patron("rough_patron")
-    basic_drinks = data_pack.get_service("basic_drinks")
+    return data_pack
 
-    basic_tap_room = Purchase("basic_tap_room", 250)
-    basic_tap_room.append_precluded_by("main_state", "dilapidated")
-    basic_tap_room.append_precluded_by("main_roof", "leaky")
-    basic_tap_room.append_precluded_by("main_glazing", "broken_shutters_only")
-    basic_tap_room.append_prerequisite("main_water_services", "functional")
-    basic_tap_room.append_provided("main_furnishings", "basic")
-    basic_tap_room.append_provided("sell_basic_drinks", "YES")
-    basic_tap_room.append_provided("taproom", "basic")
-    basic_tap_room.append_provided(commoner.get_mean_patron_occupancy_additive_tag(), 10)
-    basic_tap_room.append_provided(rough.get_mean_patron_occupancy_additive_tag(), 2)
-    basic_tap_room.append_provided(Patron.maximum_occupancy_limit_tag, 50)
-    data_pack.add_upgrade(basic_tap_room)
 
-    basic_basement_storeroom = Purchase("basic_basement_storeroom", 50)
-    basic_basement_storeroom.append_precluded_by("main_basement", "crumbling_and_unsafe")
-    basic_basement_storeroom.append_provided("maximum_drinks", 50)
-    basic_basement_storeroom.append_provided(basic_drinks.get_maximum_of_service_offered_tags(), 50)
-    basic_basement_storeroom.append_provided("store_basic_drinks", "YES")
+def add_basic_drinks_prerequisites(data_pack):
+    basic_taproom = Upgrade("basic_tap_room", 25000, 10)
+    basic_taproom.append_prerequisite(Conditional("doesnt_have", "trollskull_manor_building.taproom", ""))
+    basic_taproom.append_prerequisite(Conditional("doesnt_equal", "trollskull_manor_building.condition", "poor"))
+    basic_taproom.append_prerequisite(Conditional("doesnt_equal", "trollskull_manor_building.roof.condition", "poor"))
+    basic_taproom.append_prerequisite(Conditional("doesnt_equal", "trollskull_manor_building.windows.condition", "poor"))
+    basic_taproom.append_prerequisite(Conditional("doesnt_equal", "trollskull_manor_building.utilities.state", "off"))
+    basic_taproom.append_prerequisite(Conditional("has", "refuse_services", ""))
+    basic_taproom.append_provided(FixedAttribute("basic_drinks_sold", 200))
+    basic_taproom.append_provided(FixedAttribute("trollskull_manor_building.taproom", "basic"))
+    # TODO: Furninshing
+    basic_taproom.append_provided(ModifiesAttribute("common_patron_popularity_modifier", 10, "add"))
+    basic_taproom.append_provided(ModifiesAttribute("rough_patron_popularity_modifier", 2, "add"))
+    basic_taproom.append_provided(ModifiesAttribute("all_customers_maximum_occupancy_modifier", 50, "add"))
+    data_pack.add_upgrade(basic_taproom)
 
-    taproom_license_long = Contract("taproom_guild_license_long", 50, 36)
-    taproom_license_long.append_provided("taproom_guild_license", "YES")
+    basic_cellar = Upgrade("basic_basement_storeroom", 5000, 5)
+    basic_cellar.append_prerequisite(Conditional("doesnt_have", "trollskull_manor_building.basement.use", ""))
+    basic_cellar.append_prerequisite(Conditional("doesnt_equal", "trollskull_manor_building.basement.condition", "poor"))
+    basic_cellar.append_provided(ModifiesAttribute("basic_drinks_stored", 500, "add"))
+    data_pack.add_upgrade(basic_cellar)
+
+    taproom_license_long = Contract("taproom_guild_license_long", 10000, 365)
+    taproom_license_long.append_provided(FixedAttribute("taproom_guild_license", "YES"))
     data_pack.add_contract(taproom_license_long)
 
-    taproom_license_medium = Contract("taproom_guild_license_medium", 50, 3)
-    taproom_license_medium.append_provided("taproom_guild_license", "YES")
+    taproom_license_medium = Contract("taproom_guild_license_medium", 1000, 30)
+    taproom_license_medium.append_provided(FixedAttribute("taproom_guild_license", "YES"))
     data_pack.add_contract(taproom_license_medium)
 
-    taproom_license_short = Contract("taproom_guild_license_short", 50, 1)
-    taproom_license_short.append_provided("taproom_guild_license", "YES")
+    taproom_license_short = Contract("taproom_guild_license_short", 350, 10)
+    taproom_license_short.append_provided(FixedAttribute("taproom_guild_license", "YES"))
     data_pack.add_contract(taproom_license_short)
 
-    street_services_long = Contract("street_services_long", 50, 36)
-    street_services_long.append_provided("street_services", "YES")
+    street_services_long = Contract("street_services_long", 10000, 365)
+    street_services_long.append_provided(FixedAttribute("street_services", "YES"))
     data_pack.add_contract(street_services_long)
 
-    street_services_medium = Contract("street_services_medium", 50, 3)
-    street_services_medium.append_provided("street_services", "YES")
+    street_services_medium = Contract("street_services_medium", 1000, 30)
+    street_services_medium.append_provided(FixedAttribute("street_services", "YES"))
     data_pack.add_contract(street_services_medium)
 
-    street_services_short = Contract("street_services_short", 50, 1)
-    street_services_short.append_provided("street_services", "YES")
+    street_services_short = Contract("street_services_short", 350, 10)
+    street_services_short.append_provided(FixedAttribute("street_services", "YES"))
     data_pack.add_contract(street_services_short)
 
-    water_services_long = Contract("water_services_long", 50, 36)
-    water_services_long.append_provided("water_services", "YES")
+    water_services_long = Contract("water_services_long", 10000, 365)
+    water_services_long.append_provided(FixedAttribute("water_services", "YES"))
     data_pack.add_contract(water_services_long)
 
-    water_services_medium = Contract("water_services_medium", 50, 36)
-    water_services_medium.append_provided("water_services", "YES")
+    water_services_medium = Contract("water_services_medium", 1000, 30)
+    water_services_medium.append_provided(FixedAttribute("water_services", "YES"))
     data_pack.add_contract(water_services_medium)
 
-    water_services_short = Contract("water_services_short", 50, 36)
-    water_services_short.append_provided("water_services", "YES")
+    water_services_short = Contract("water_services_short", 350, 10)
+    water_services_short.append_provided(FixedAttribute("water_services", "YES"))
     data_pack.add_contract(water_services_short)
 
-    refuse_services_year = Contract("refuse_services_long", 50, 36)
-    refuse_services_year.append_provided("refuse_services", "YES")
+    refuse_services_year = Contract("refuse_services_long", 10000, 365)
+    refuse_services_year.append_provided(FixedAttribute("refuse_services", "YES"))
     data_pack.add_contract(refuse_services_year)
 
-    refuse_services_month = Contract("refuse_services_medium", 50, 3)
-    refuse_services_month.append_provided("refuse_services", "YES")
+    refuse_services_month = Contract("refuse_services_medium", 1000, 30)
+    refuse_services_month.append_provided(FixedAttribute("refuse_services", "YES"))
     data_pack.add_contract(refuse_services_month)
 
-    refuse_services_short = Contract("refuse_services_short", 50, 1)
-    refuse_services_short.append_provided("refuse_services", "YES")
+    refuse_services_short = Contract("refuse_services_short", 359, 10)
+    refuse_services_short.append_provided(FixedAttribute("refuse_services", "YES"))
     data_pack.add_contract(refuse_services_short)
 
-    supply_basic_drinks_contract_good = Contract("supply_basic_drinks_contract_poor", 0, 36, hidden=True)
-    supply_basic_drinks_contract_good.append_provided("supply_basic_drinks", 8)
-    data_pack.add_contract(supply_basic_drinks_contract_good)
+    supply_basic_drinks_contract = Contract("drinks_guild_license_long", 10000, 365)
+    supply_basic_drinks_contract.append_provided(FixedAttribute("basic_drinks_supplied", ""))
+    data_pack.add_contract(supply_basic_drinks_contract)
 
-    supply_basic_drinks_contract_medium = Contract("supply_basic_drinks_contract_poor", 0, 36, hidden=True)
-    supply_basic_drinks_contract_medium.append_provided("supply_basic_drinks", 9)
-    data_pack.add_contract(supply_basic_drinks_contract_medium)
+    supply_basic_drinks_contract = Contract("drinks_guild_license_long", 1000, 30)
+    supply_basic_drinks_contract.append_provided(FixedAttribute("basic_drinks_supplied", ""))
+    data_pack.add_contract(supply_basic_drinks_contract)
 
-    supply_basic_drinks_contract_poor = Contract("supply_basic_drinks_contract_poor", 0, 36, hidden=True)
-    supply_basic_drinks_contract_poor.append_provided("supply_basic_drinks", 10)
-    data_pack.add_contract(supply_basic_drinks_contract_poor)
+    supply_basic_drinks_contract = Contract("drinks_guild_license_long", 350, 10)
+    supply_basic_drinks_contract.append_provided(FixedAttribute("basic_drinks_supplied", ""))
+    data_pack.add_contract(supply_basic_drinks_contract)
 
     return data_pack

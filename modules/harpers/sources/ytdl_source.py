@@ -31,6 +31,7 @@ class YTDLSource(Source):
         'no_warnings': True,
         'default_search': 'auto',
         'source_address': '0.0.0.0',
+        'verbose': True,
     }
 
     FFMPEG_OPTIONS = {
@@ -40,6 +41,7 @@ class YTDLSource(Source):
     }
 
     ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
+    ytdl.cache.remove()
 
     def __init__(self, ctx: commands.Context, source: discord.FFmpegPCMAudio, *, data: dict, volume: float = 0.5):
         super().__init__(ctx=ctx, source=source, data=data, volume=volume)

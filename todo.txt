@@ -11,15 +11,17 @@
 11) [DONE] GM apply available upgrades
 12) [DONE] GM List contracts and Contract purchase
 13) [DONE] Players list staff and GM Staff purchase
-14) Tavern test viewable after several purchase types
-15) Tavern test state changes in descriptions
-16) Move to per day sims
-17) Tavern test basic simulations
-18) Tavern -> business impact assessment
-19) Calendar
-20) Game Channels
-21) Handbook implementation - data pack and query interface (users & api)
-22) Game data implementation - Calendar, Currency, "Rations", data tagging
+14) Full Tier 1 test
+15) Reasses player info (text based 'what do i need to get this')
+16) Reasses removing staff / contracts
+17) Move to per day sims
+18) Tavern test basic simulations
+19) Tavern -> business impact assessment
+20) Multi business
+21) Game Channels
+22) Handbook / Campaign management data packs and common data pack framework?
+23) Handbook implementation - data pack and query interface (users & api)
+24) Game data implementation - Calendar, Currency, "Rations", data tagging
     (i.e. how does rest module know what to look for in inventory module
      in order to assess whether the adventurers have enough food)
 
@@ -48,6 +50,8 @@ Randoms:
     [DONE] currency iteration order
     [DONE] Initialize remaining days on contract
     [DONE] currency weight
+    [DONE] Inventory store should handle items with spaces
+    [DONE] Fixed the major bugs in the harpers - 403 on songs etc
 
     [TODO] up enter
     [TODO] tab complete
@@ -60,3 +64,18 @@ Randoms:
     [TODO] Furniture should not be in building, but room props
     [TODO] Currency as a data pack / integration?
     [TODO] Calendar + Currency etc in campaign management data pack???!
+    [TODO] Datapacks as python?
+    [TODO] Earmark key datapack tags somewhere!
+    [TODO] Validate some of our tags?
+    [TODO] Tavern reset
+    [TODO] Finish inventory:add so that it can handle float weights
+    [TODO] Tavern viewer for separate debugging.
+
+
+Notes:
+    services offered gates customer types
+    popularity denotes customer attendance
+    mechanics denote services sold
+        sales are in order of pop priority (or random, or priority weighting but random)
+
+

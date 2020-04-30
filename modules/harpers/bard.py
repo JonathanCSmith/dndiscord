@@ -14,6 +14,7 @@ class Bard:
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+        self.exists = True
         self.current = None
         self.voice = None
         self.next = asyncio.Event()
@@ -65,6 +66,7 @@ class Bard:
                         self.current = await self.set_list.get()
                 except asyncio.TimeoutError:
                     self.bot.loop.create_task(self.stop())
+                    self.exists = False
                     return
 
             self.current.source.volume = self._volume

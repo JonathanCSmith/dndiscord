@@ -166,7 +166,7 @@ class GameMaster(Module):
 
         # This permissions level allows any member of the party to run the command
         if permissions_level >= constants.party_member:
-            if game.is_player(ctx.author.id):
+            if game.is_adventurer(ctx.author.id):
                 return True, ""
 
         # This permissions level only allows for the gm or elevated roles
@@ -342,9 +342,11 @@ class GameMaster(Module):
 
         # Set this game as our active game
         self.__set_active_game_for_context(ctx, game)
+        await ctx.send("`Set the game: " + game_name + " as our active game!`")
 
-        # Inform the channel
-        return await ctx.send("`Set the game: " + game_name + " as our active game!`")
+        # Inform our listeners
+        for listener in self.game_state_listeners:
+            await listener.game_started(ctx, game)
 
     @commands.command(name="game:end")
     async def _end_game(self, ctx: commands.Context):
@@ -416,7 +418,7 @@ class GameMaster(Module):
         # Check if the player is already a member
         game = self.get_active_game_for_context(ctx)
         player = ctx.message.mentions[0]
-        if game.is_player(player.id):
+        if game.is_adventurer(player.id):
             return await ctx.send("`This adventurer already is a member of your party.`")
 
         # Check args

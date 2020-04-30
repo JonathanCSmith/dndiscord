@@ -59,7 +59,7 @@ class Harpers(Module):
 
     def get_bard_for_context(self, ctx: commands.Context):
         bard = self.bards.get(ctx.guild.id)
-        if not bard:
+        if not bard or not bard.exists:
             bard = Bard(self.bot)
             self.bards[ctx.guild.id] = bard
 
@@ -74,7 +74,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:summon", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:summon", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -101,7 +101,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:close", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:close", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -118,7 +118,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:volume", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:volume", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -140,7 +140,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -170,7 +170,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:pause", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:pause", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -187,7 +187,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:resume", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:resume", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -205,7 +205,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:stop_and_clear", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:stop_and_clear", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -223,7 +223,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:next", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:next", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -245,7 +245,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:loop", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:loop", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -265,7 +265,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:shuffle", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:shuffle", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -284,7 +284,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:remove_song_from_setlist", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:remove_song_from_setlist", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -303,7 +303,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:queue", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:queue", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -332,7 +332,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:now", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:now", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
@@ -350,7 +350,7 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         else:
-            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play:favourite", special_roles=[self.bard_roles])
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play:favourite", elevated_roles=[self.bard_roles])
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 

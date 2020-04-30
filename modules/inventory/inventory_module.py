@@ -9,6 +9,7 @@ from utils import constants
 from utils.currency import CurrencyError
 from utils.errors import CommandRunError
 from utils.messages import LongMessage
+from utils.strings import get_trailing_number, replace_count_reverse
 
 """
 TODO: Personal Inventory Support
@@ -181,13 +182,20 @@ class InventoryManager(Module, GameStateListener):
         if not ctx.inventory:
             return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
 
-        # Lets parse our arguments
-        args = info.split()
-        if len(args) != 3:
+        # Get the weight
+        weight = get_trailing_number(info)
+        info = replace_count_reverse(info, str(weight), "", 1).strip()
+        if weight is None:
+            return await ctx.send("`In the current iteration of your inventory goblin it's required that you provide three arguments to stash. Item name, amount, weight per item!`")
+
+        # Get the amount
+        amount = get_trailing_number(info)
+        info = replace_count_reverse(info, str(amount), "", 1).strip()
+        if not amount:
             return await ctx.send("`In the current iteration of your inventory goblin it's required that you provide three arguments to stash. Item name, amount, weight per item!`")
 
         # Add the item to our inventory
-        item = await ctx.inventory.add_object_to_inventory(args[0], int(args[1]), float(args[2]))
+        item = await ctx.inventory.add_object_to_inventory(info, amount, float(weight))
         await ctx.send("`You now have: " + str(item) + "`")
 
         # Save the changed inventory
