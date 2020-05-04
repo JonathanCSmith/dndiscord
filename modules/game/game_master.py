@@ -119,15 +119,15 @@ class GameMaster(Module):
             return True, ""
 
         # This permissions level allows any member of the party to run the command
-        if permissions_level >= constants.party_member:
+        if permissions_level <= constants.party_member:
             if game.is_adventurer(ctx.author.id):
                 return True, ""
 
         # This permissions level only allows for the gm or elevated roles
-        if permissions_level >= constants.gm:
+        if permissions_level <= constants.gm:
 
             # Check if the user is the gm of the game
-            if game.is_gm(ctx.author.it):
+            if game.is_gm(ctx.author.id):
                 return True, ""
 
         # If the permissions level == 3 or if it was an unregistered permission and the user is not an admin
@@ -165,15 +165,15 @@ class GameMaster(Module):
             return True, ""
 
         # This permissions level allows any member of the party to run the command
-        if permissions_level >= constants.party_member:
+        if permissions_level <= constants.party_member:
             if game.is_adventurer(ctx.author.id):
                 return True, ""
 
         # This permissions level only allows for the gm or elevated roles
-        if permissions_level >= constants.gm:
+        if permissions_level <= constants.gm:
 
             # Check if the user is the gm of the game
-            if game.is_gm(ctx.author.it):
+            if game.is_gm(ctx.author.id):
                 return True, ""
 
         # If the permissions level == 3 or if it was an unregistered permission and the user is not an admin
@@ -396,11 +396,14 @@ class GameMaster(Module):
         await ctx.send("`You are currently involved in the following games:`")
         async with ctx.typing():
             for game in guild_data.games:
-                permissions_check, reason = await self.check_inactive_game_permissions_for_user(ctx, game.get_name(), "game_master:game:list", permissions_level=constants.party_member)
+                permissions_check, reason = await self.check_inactive_game_permissions_for_user(ctx, game, "game_master:game:list", permissions_level=constants.party_member)
                 if permissions_check:
-                    await ctx.send("`" + game.get_name() + "`")
+                    await ctx.send("`" + game + "`")
 
-    @commands.command(name="game:add_adventurer")
+    """
+    TODO: Dummy players
+    """
+    @commands.command(name="game:adventurer:add")
     async def _add_adventurer(self, ctx: commands.Context):
         # Can the user initiate a call to this command
         permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:add_adventurer", permissions_level=constants.gm)
@@ -431,16 +434,46 @@ class GameMaster(Module):
         player_entry = Adventurer(player.id, player.name, adventurer_name)
 
         # Append our player entry and save the guild data
-        game.add_player(player_entry)
+        game.add_adventurer(player_entry)
         guild_data = await self.__get_guild_data(ctx)
         guild_data.update_game(game)
         await self.__save_guild_data(ctx, guild_data)
         return await ctx.send("`Added the adventurer: " + adventurer_name + " to the party.`")
 
-    @commands.command(name="game:remove_adventurer")
+    @commands.command(name="game:adventurer:add:dummy")
+    async def _add_dummy_adventurer(self, ctx: commands.Context, *, items: str):
+        # Can the user initiate a call to this command
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:add_adventurer", permissions_level=constants.gm)
+        if not permissions_check:
+            return await ctx.send("`" + reason + "`")
+
+        # Check if the player is already a member
+        game = self.get_active_game_for_context(ctx)
+
+        # Args
+        items = items.split(" ", 1)
+        if len(items) != 2:
+            return await ctx.send("`Incorrect arguments.`")
+
+        fake_name = items[0]
+        adventurer = items[1]
+        if fake_name is "" or adventurer is "":
+            return await ctx.send("`Incorrect arguments.`")
+
+        # Create a player entry
+        player_entry = Adventurer(fake_name, fake_name, adventurer)
+
+        # Append our player entry and save the guild data
+        game.add_adventurer(player_entry)
+        guild_data = await self.__get_guild_data(ctx)
+        guild_data.update_game(game)
+        await self.__save_guild_data(ctx, guild_data)
+        return await ctx.send("`Added the adventurer: " + adventurer + " to the party.`")
+
+    @commands.command(name="game:adventurer:remove")
     async def _remove_adventurer(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        permissions_check, reason = self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.gm)
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.gm)
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
@@ -455,22 +488,46 @@ class GameMaster(Module):
         # Check if the player is already a member
         game = self.get_active_game_for_context(ctx)
         player = ctx.message.mentions[0]
-        adventurer = game.get_player(player.id)
+        adventurer = game.get_adventurer(player.id)
 
         # Handle if they are not
         if adventurer is None:
             return await ctx.send("`This adventurer is not in your party.`")
 
         # Remove and update
-        game.remove_player(player.id)
-        await self.__save_guild_data(ctx, await self.__get_guild_data(ctx))
+        game.remove_adventurer(player.id)
+        guild_data = await self.__get_guild_data(ctx)
+        guild_data.update_game(game)
+        await self.__save_guild_data(ctx, guild_data)
 
         return await ctx.send("`Removed the adventurer: " + adventurer.character_name + " from the party.`")
+
+    @commands.command(name="game:adventurer:remove:dummy")
+    async def _remove_dummy_adventurer(self, ctx: commands.Context, *, player: str):
+        # Can the user initiate a call to this command
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:remove_adventurer", permissions_level=constants.gm)
+        if not permissions_check:
+            return await ctx.send("`" + reason + "`")
+
+        # Check if the player is already a member
+        game = self.get_active_game_for_context(ctx)
+
+        # Handle if they are not
+        if player is None or not game.is_adventurer(player):
+            return await ctx.send("`This adventurer is not in your party.`")
+
+        # Remove and update
+        game.remove_adventurer(player)
+        guild_data = await self.__get_guild_data(ctx)
+        guild_data.update_game(game)
+        await self.__save_guild_data(ctx, guild_data)
+
+        return await ctx.send("`Removed the adventurer: " + player + " from the party.`")
 
     @commands.command(name="game:adventurer:list")
     async def _list_adventurers(self, ctx: commands.Context):
         # Can the user initiate a call to this command
-        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:adventurer:list", permissions_level=constants.gm)
+        permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:adventurer:list", permissions_level=constants.party_member)
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
@@ -485,7 +542,7 @@ class GameMaster(Module):
             for index, adventurer in adventurers.items():
                 await ctx.send("`" + adventurer.character_name + " is controlled by: " + adventurer.player_name + "`")
 
-    @commands.command(name="game:pass:day")
+    @commands.command(name="game:day:pass")
     async def _pass_day(self, ctx: commands.Context):
         # Can the user initiate a call to this command
         permissions_check, reason = await self.check_active_game_permissions_for_user(ctx, "game_master:pass:day", permissions_level=constants.gm)
@@ -495,5 +552,15 @@ class GameMaster(Module):
         # Check if the player is already a member
         game = self.get_active_game_for_context(ctx)
         game.increment_day()
+
+        # Inform now
         await ctx.send("`A new day dawns in : " + game.get_name() + "`")
+
+        # Tell our listeners
+        for listener in self.game_state_listeners:
+            await listener.day_passed(ctx, game)
+
+        guild_data = await self.__get_guild_data(ctx)
+        guild_data.update_game(game)
+        await self.__save_guild_data(ctx, guild_data)
 

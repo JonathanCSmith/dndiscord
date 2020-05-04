@@ -47,9 +47,12 @@ class ServicesManager(Module):
         # Lets remove it from our inventory
         # TODO: For now we just call rations directly
         if self.inventory_manager:
-            await ctx.send("`Attempting to remove these from your group's inventory automatically.`")
+            await ctx.send("`Attempting to remove [ration]s from your group's inventory automatically.`")
             ctx.inventory = await self.inventory_manager.get_inventory(ctx)
-            await self.inventory_manager._inventory_remove(ctx, info="ration " + player_count)
+            if await self.inventory_manager._inventory_remove(ctx, info="ration " + player_count):
+                return await ctx.send("`The food has been consumed!`")
+            else:
+                return await ctx.send("`You do not have enough food! [Hint: ration is the thing you need]`")
 
     @commands.command(name="services:inn:rest")
     async def _rest_at_inn(self, ctx: commands.Context, *, cost_in_cp: int):
@@ -72,7 +75,10 @@ class ServicesManager(Module):
         if self.inventory_manager:
             await ctx.send("`Attempting to remove this from your group's inventory automatically.`")
             ctx.inventory = await self.inventory_manager.get_inventory(ctx)
-            await self.inventory_manager._inventory_remove(ctx, info=currency.copper_pieces + " " + cost)
+            if await self.inventory_manager._inventory_remove(ctx, info=currency.copper_pieces + " " + cost):
+                return await ctx.send("`You have successfully paid for your rest.`")
+            else:
+                return await ctx.send("`You do not have enough to pay for your rest!`")
 
     @commands.command(name="services:inn:eat")
     async def _eat_at_inn(self, ctx: commands.Context, *, cost_in_cp: int):
@@ -95,4 +101,7 @@ class ServicesManager(Module):
         if self.inventory_manager:
             await ctx.send("`Attempting to remove this from your group's inventory automatically.`")
             ctx.inventory = await self.inventory_manager.get_inventory(ctx)
-            await self.inventory_manager._inventory_remove(ctx, info=currency.copper_pieces + " " + str(cost))
+            if await self.inventory_manager._inventory_remove(ctx, info=currency.copper_pieces + " " + str(cost)):
+                return await ctx.send("`You have successfully paid for your food.`")
+            else:
+                return await ctx.send("`You do not have enough to pay for your food!`")

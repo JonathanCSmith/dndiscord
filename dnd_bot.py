@@ -3,9 +3,11 @@ import shutil
 
 from discord.ext import commands
 
+from modules.calendar.calendar_module import CalendarManager
 from modules.inventory.inventory_module import InventoryManager
 from modules.game.game_master import GameMaster
 from modules.harpers.harpers_module import Harpers
+from modules.reminder.reminder_module import ReminderManager
 from modules.services.services_module import ServicesManager
 from modules.tavern_simulator.tavern_module import TavernSimulator
 from utils import dice, data
@@ -49,6 +51,8 @@ class DNDiscordBot:
     is_tavern_module_enabled = True
     is_party_management_enabled = True
     is_services_module_enabled = True
+    is_calendar_module_enabled = True
+    is_reminder_module_enabled = True
 
     def __init__(self, token):
         self.token = token
@@ -79,6 +83,16 @@ class DNDiscordBot:
         if DNDiscordBot.is_services_module_enabled:
             inventory_module = ServicesManager(self)
             self.add_module(inventory_module)
+
+        # Calendar module
+        if DNDiscordBot.is_calendar_module_enabled:
+            calendar_manager = CalendarManager(self)
+            self.add_module(calendar_manager)
+
+        # Reminder module
+        if DNDiscordBot.is_reminder_module_enabled:
+            reminder_manager = ReminderManager(self)
+            self.add_module(reminder_manager)
 
         # Handbook module
 

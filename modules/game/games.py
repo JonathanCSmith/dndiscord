@@ -39,11 +39,19 @@ class Game:
     def get_adventurers(self):
         return self.adventurers
 
+    def get_adventurer(self, player_id):
+        return self.adventurers[str(player_id)]
+
     def is_adventurer(self, player_id):
         return str(player_id) in self.adventurers
 
-    def add_player(self, adventurer_entry):
+    def add_adventurer(self, adventurer_entry):
         self.adventurers[str(adventurer_entry.player_id)] = adventurer_entry
+
+    def remove_adventurer(self, player_id):
+        id = str(player_id)
+        if id in self.adventurers:
+            del self.adventurers[id]
 
     def get_permission_level(self, permissions_name):
         if permissions_name is self.permissions:
@@ -70,6 +78,8 @@ class GuildData:
     def get_permission_level(self, permissions_name):
         if permissions_name is self.permissions:
             return self.permissions[permissions_name]
+        else:
+            return -1
 
     def set_permissions_level(self, permissions_name, level):
         self.permissions[permissions_name] = level

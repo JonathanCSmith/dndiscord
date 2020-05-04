@@ -4,12 +4,6 @@ from collections import OrderedDict
 import utils.currency as currency_handler
 
 
-"""
-TODO: Currency weight
-TODO: Ordering of currency when iterating through it
-"""
-
-
 class Inventory:
     def __init__(self, id, items=None, currency=None):
         self.id = id
@@ -43,7 +37,7 @@ class Inventory:
             return str(number) + " " + obj
 
         for item in self.items:
-            if obj == item.obj:
+            if obj == item.obj and weight_per_obj == item.weight_per_obj:
                 item.number += number
                 return item
 
@@ -88,7 +82,7 @@ class Inventory:
 
     def remove_currency(self, obj, amount):
         if self.currency[obj] >= amount:
-            self.currency -= amount
+            self.currency[obj] -= amount
             return True
 
         else:

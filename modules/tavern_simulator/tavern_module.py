@@ -7,9 +7,9 @@ from module_properties import Module
 from modules.tavern_simulator.data_packs import default_data_pack
 from modules.tavern_simulator.model.new_data_pack import DataPack
 from modules.tavern_simulator.tavern_controller import Tavern
+from modules.tavern_simulator.gui.player_view_builder import build_status_view_players, build_purchaseable_view_players
 from utils import constants
 from utils.errors import CommandRunError
-from utils.messages import LongMessage
 from utils.strings import get_trailing_number
 
 """
@@ -105,6 +105,9 @@ class TavernSimulator(Module):
     async def game_deleted(self, ctx, game):
         # TODO DELETE DATA
         await self.unload_tavern_for_context(ctx, game)
+
+    async def day_passed(self, ctx, game):
+        pass
 
     async def _get_data_pack(self, ctx, pack_name):
         data_pack = None
@@ -212,7 +215,7 @@ class TavernSimulator(Module):
     @commands.command(name="tavern:name")
     async def _name(self, ctx: commands.Context, *, name: str = ""):
         # Can the user initiate the call to this command
-        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:name", permissions_level=constants.party_member)
+        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:name", permissions_level=constants.gm)
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
@@ -238,75 +241,17 @@ class TavernSimulator(Module):
         if not tavern:
             return await ctx.send("`There is no tavern being operated in your game!`")
 
-        # Create our status representation in long message form
-        long_message = LongMessage()
-
-        # Gather our business status
-        long_message.add("===================================")  # Fake new line
-        long_message.add("Your business: " + tavern.get_name() + " has the following properties: ")
-        long_message.add("===================================")  # Fake new line
-        for property, value in tavern.get_properties().items():
-            key = "tavern." + tavern.data_pack.name + "." + property
-
-            if value is not None or value is not "":
-                detail_key = key + "." + str(value)
-                translation = await self.manager.get_translation_for_current_localization(ctx, detail_key)
-
-                if translation != detail_key:
-                    long_message.add(translation)
-                    continue
-
-            translation = await self.manager.get_translation_for_current_localization(ctx, key)
-            long_message.add(str(translation) + (" " + str(value) if value is not None else ""))
-
-        # Gather our staff
-        staff = tavern.get_staff()
-        count = len(staff)
-        long_message.add(None)
-        long_message.add("===================================")  # Fake new line
-        long_message.add("You currently have " + str(count) + " employees." + (" They are:" if count > 0 else ""))
-        for staff_member in staff:
-            long_message.add(str(staff_member))
-
-        # Active contracts
-        contracts = tavern.get_contracts()
-        long_message.add(None)
-        long_message.add("===================================")  # Fake new line
-        long_message.add("You currently have " + str(len(contracts)) + " contracts ongoing.")
-        for contract in contracts:
-            long_message.add(str(contract))
-
-        # Customers
-        customers = tavern.get_most_recent_customer_history()
-        long_message.add(None)
-        long_message.add("===================================")  # Fake new line
-        if customers:
-            long_message.add("Last tenday you had the following customers:")
-            for customer_entry in customers:
-                long_message.add(str(customer_entry))
-        else:
-            long_message.add("You have had no customers over the last week.")
-
-        # Offering
-        services = tavern.get_most_recent_sales_history()
-        long_message.add(None)
-        long_message.add("===================================")  # Fake new line
-        if services:
-            long_message.add("Last tenday you served the following: ")
-            for service in services:
-                long_message.add(str(service))
-        else:
-            long_message.add("You have had no sales over the last week.")
+        long_message = await build_status_view_players(tavern, self.manager, ctx)
 
         # Output
         async with ctx.typing():
             for message in long_message:
                 await ctx.send(message)
 
-    @commands.command(name="tavern:purchaseable_upgrades")
-    async def _purchaseable_upgrades(self, ctx: commands):
+    @commands.command(name="tavern:purchaseables")
+    async def _purchaseables(self, ctx: commands):
         # Can this user initiate the call to this command
-        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:purchaseable_upgrades", permissions_level=constants.gm)
+        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:purchaseables", permissions_level=constants.gm)
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
@@ -315,22 +260,7 @@ class TavernSimulator(Module):
         if not tavern:
             return await ctx.send("`There is no tavern being operated in your game!`")
 
-        # Get the results to post
-        purchaseable = tavern.get_upgradeable()
-
-        # Create an output message
-        long_message = LongMessage()
-        long_message.add("The business can apply the following upgrades: ")
-
-        # Gather our business status
-        long_message.add(" ")  # Fake new line
-        for purchaseable in purchaseable:
-            long_message.add("===================================")
-            purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, purchaseable.get_key())
-            long_message.add("Upgrade: " + purchaseable.get_key())
-            long_message.add(" ")
-            long_message.add(purchaseable_name + " can be purchased for " + str(float(purchaseable.cost) / 100.0) + " gold and will take " + str(purchaseable.duration) + " days to construct")
-            long_message.add(" ")
+        long_message = await build_purchaseable_view_players(tavern, self.manager, ctx)
 
         # Output
         async with ctx.typing():
@@ -363,40 +293,6 @@ class TavernSimulator(Module):
         else:
             return await ctx.send("`The upgrade could not be purchased.`")
 
-    @commands.command(name="tavern:purchaseable_contracts")
-    async def _purchaseable_contracts(self, ctx: commands):
-        # Can this user initiate the call to this command
-        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:purchaseable_contracts", permissions_level=constants.gm)
-        if not permissions_check:
-            return await ctx.send("`" + reason + "`")
-
-        # Get the tavern and exit if there is none
-        tavern = await self.get_tavern_for_context(ctx)
-        if not tavern:
-            return await ctx.send("`There is no tavern being operated in your game!`")
-
-        # Get the results to post
-        contractables = tavern.get_contractable()
-
-        # Create an output message
-        long_message = LongMessage()
-        long_message.add("The business can apply the following contracts: ")
-
-        # Gather our business status
-        long_message.add(" ")  # Fake new line
-        for contract in contractables:
-            long_message.add("===================================")
-            purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, contract.get_key())
-            long_message.add("Contract: " + contract.get_key())
-            long_message.add(" ")
-            long_message.add(purchaseable_name + " can be purchased for " + str(float(contract.cost) / 100.0) + " gold and will last for  " + str(contract.duration) + " days.")
-            long_message.add(" ")
-
-        # Output
-        async with ctx.typing():
-            for message in long_message:
-                await ctx.author.send(message)
-
     @commands.command(name="tavern:purchase_contract")
     async def _purchase_contract(self, ctx: commands.Context, *, item: str):
         # Can this user initiate the call to this command
@@ -426,40 +322,6 @@ class TavernSimulator(Module):
 
         else:
             return await ctx.send("`The upgrade could not be applied.`")
-
-    @commands.command(name="tavern:available_staff")
-    async def _available_staff(self, ctx: commands):
-        # Can this user initiate the call to this command
-        permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "tavern:available_staff", permissions_level=constants.party_member)
-        if not permissions_check:
-            return await ctx.send("`" + reason + "`")
-
-        # Get the tavern and exit if there is none
-        tavern = await self.get_tavern_for_context(ctx)
-        if not tavern:
-            return await ctx.send("`There is no tavern being operated in your game!`")
-
-        # Get the results to post
-        hireables = tavern.get_hireable()
-
-        # Create an output message
-        long_message = LongMessage()
-        long_message.add("The business can apply the following upgrades: ")
-
-        # Gather our business status
-        long_message.add(" ")  # Fake new line
-        for hireable in hireables:
-            long_message.add("===================================")
-            purchaseable_name = await self.manager.get_translation_for_current_localization(ctx, hireable.get_key())
-            long_message.add("Employee Type: " + hireable.get_key())
-            long_message.add(" ")
-            long_message.add(purchaseable_name + " can be hired for " + str(hireable.cost_per_day) + " copper pieces a day.")
-            long_message.add(" ")
-
-        # Output
-        async with ctx.typing():
-            for message in long_message:
-                await ctx.author.send(message)
 
     @commands.command(name="tavern:hire_staff")
     async def _hire_staff(self, ctx: commands.Context, *, item: str):

@@ -1,6 +1,7 @@
 import os
 from collections import OrderedDict
 
+from utils import data
 from utils.translations import TranslationSource
 
 
@@ -84,9 +85,6 @@ class BusinessStateModifier:
     def append_provided(self, attribute: Attribute):
         self.provides[attribute.get_key()] = attribute
 
-    def get_precluded_by(self):
-        return dict()
-
 
 class Upgrade(BusinessStateModifier):
     def __init__(self, unique_key, cost, duration, requirements=None, provides=None):
@@ -132,6 +130,9 @@ class ServiceOffered(BusinessStateModifier):
             if item not in self.sale_value_modifiers:
                 self.sale_value_modifiers.append(item)
 
+    def get_cost_value_modifiers(self):
+        return self.cost_value_modifiers
+
 
 class Customer(BusinessStateModifier):
     def __init__(self, unique_key, customer_tier, popularity_modifiers=None, occupancy_modifiers=None, services_consumed=None, requirements=None, provides=None):
@@ -157,13 +158,16 @@ class Customer(BusinessStateModifier):
             if item not in self.occupancy_modifiers:
                 self.occupancy_modifiers.append(item)
 
+    def get_consumed_services(self):
+        return self.services_consumed
+
     def add_consumed_service(self, key, amount):
         if key in self.services_consumed:
             self.services_consumed[key] += amount
         else:
             self.services_consumed[key] = amount
 
-    def get_popularity_modifier(self):
+    def get_popularity_modifiers(self):
         return self.popularity_modifiers
 
     def get_maximum_occupancy_modifiers(self):
@@ -191,33 +195,33 @@ class DataPack:
         data_pack_data = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "data_pack.json")
         initial = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "initial.json")
         services = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "services.json")
-        staff = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "staff.json")
-        patrons = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "patrons.json")
-        purchaseable = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "purchaseable.json")
+        employees = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "employees.json")
+        customers = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "customers.json")
+        upgrades = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "upgrades.json")
         contracts = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "contracts.json")
         translations = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "translation_index.json")
 
         # Try our backup, which is in the bot root
-        if initial is None and services is None and staff is None and patrons is None and purchaseable is None and contracts is None:
+        if initial is None and services is None and employees is None and customers is None and upgrades is None and contracts is None:
             is_guild = False
             data_pack_data = await manager.load_data_from_data_path(path_modifier, "data_pack.json")
             initial = await manager.load_data_from_data_path(path_modifier, "initial.json")
             services = await manager.load_data_from_data_path(path_modifier, "services.json")
-            staff = await manager.load_data_from_data_path(path_modifier, "staff.json")
-            patrons = await manager.load_data_from_data_path(path_modifier, "patrons.json")
-            purchaseable = await manager.load_data_from_data_path(path_modifier, "purchaseable.json")
+            employees = await manager.load_data_from_data_path(path_modifier, "employees.json")
+            customers = await manager.load_data_from_data_path(path_modifier, "customers.json")
+            upgrades = await manager.load_data_from_data_path(path_modifier, "upgrades.json")
             contracts = await manager.load_data_from_data_path(path_modifier, "contracts.json")
             translations = await manager.load_data_from_data_path(path_modifier, "translation_index.json")
 
         # Output nothing if there is nothing loaded. Any data whatsoever, and we assume it's correct
-        if initial is None and services is None and staff is None and patrons is None and purchaseable is None and contracts is None:
+        if initial is None and services is None and employees is None and customers is None and upgrades is None and contracts is None:
             return None
 
         # If we have translations to load
         if translations:
             await manager.load_translations_package(ctx, TranslationSource("tavern." + pack_name, path_modifier, translations, is_guild))
 
-        return DataPack(pack_name, original_path_modifier, is_guild, data_pack_data=data_pack_data, initial=initial, services=services, staff=staff, patrons=patrons, upgrades=purchaseable, contracts=contracts)
+        return DataPack(pack_name, original_path_modifier, is_guild, data_pack_data=data_pack_data, initial=initial, services=services, staff=employees, patrons=customers, upgrades=upgrades, contracts=contracts)
 
     def __init__(self, name, path_modifier, is_guild, business_name=None, description=None, data_pack_data=None, initial=None, services=None, staff=None, patrons=None, upgrades=None, contracts=None):
         self.name = name
@@ -260,6 +264,12 @@ class DataPack:
 
     def get_path(self):
         return self.path_modifier
+
+    def get_business_name(self):
+        return self.data_pack_data.business_name
+
+    def get_business_description(self):
+        return self.data_pack_data.description
 
     def get_initial_states(self):
         return self.initial.values()
@@ -318,15 +328,15 @@ class DataPack:
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "data_pack.json", self.data_pack_data)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "initial.json", self.initial)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "services.json", self.services)
-            await manager.save_data_in_data_path_for_guild(ctx, save_path, "staff.json", self.employee)
-            await manager.save_data_in_data_path_for_guild(ctx, save_path, "patrons.json", self.patrons)
-            await manager.save_data_in_data_path_for_guild(ctx, save_path, "purchaseable.json", self.upgrades)
+            await manager.save_data_in_data_path_for_guild(ctx, save_path, "employees.json", self.employee)
+            await manager.save_data_in_data_path_for_guild(ctx, save_path, "customers.json", self.patrons)
+            await manager.save_data_in_data_path_for_guild(ctx, save_path, "upgrades.json", self.upgrades)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "contracts.json", self.contracts)
         else:
             await manager.save_data_in_data_path(save_path, "data_pack.json", self.data_pack_data)
             await manager.save_data_in_data_path(save_path, "initial.json", self.initial)
             await manager.save_data_in_data_path(save_path, "services.json", self.services)
-            await manager.save_data_in_data_path(save_path, "staff.json", self.employee)
-            await manager.save_data_in_data_path(save_path, "patrons.json", self.patrons)
-            await manager.save_data_in_data_path(save_path, "purchaseable.json", self.upgrades)
+            await manager.save_data_in_data_path(save_path, "employees.json", self.employee)
+            await manager.save_data_in_data_path(save_path, "customers.json", self.patrons)
+            await manager.save_data_in_data_path(save_path, "upgrades.json", self.upgrades)
             await manager.save_data_in_data_path(save_path, "contracts.json", self.contracts)

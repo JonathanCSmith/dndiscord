@@ -52,6 +52,9 @@ Randoms:
     [DONE] currency weight
     [DONE] Inventory store should handle items with spaces
     [DONE] Fixed the major bugs in the harpers - 403 on songs etc
+    [DONE] Business datapack file names need updating
+    [DONE] Validation of the expected data pack for a save?!
+    [DONE] Tavern overwriting
 
     [TODO] up enter
     [TODO] tab complete
@@ -70,6 +73,10 @@ Randoms:
     [TODO] Tavern reset
     [TODO] Finish inventory:add so that it can handle float weights
     [TODO] Tavern viewer for separate debugging.
+    [TODO] End of day simulation
+    [TODO] Speed build and game day cycling in gui
+    [TODO] Day pass in business
+    [TODO] Translation manager auto add on data pack add
 
 
 Notes:

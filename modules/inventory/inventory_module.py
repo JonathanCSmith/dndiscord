@@ -24,7 +24,7 @@ class InventoryManager(Module, GameStateListener):
         if self.game_master:
             self.game_master.register_game_state_listener(self)
         else:
-            raise RuntimeError("Cannot use the tavern simulator without the Game Master module.")
+            raise RuntimeError("Cannot use the inventory module without the Game Master module.")
 
     def cog_check(self, ctx: commands.Context):
         if not ctx.guild:
@@ -110,6 +110,11 @@ class InventoryManager(Module, GameStateListener):
     COMMANDS SECTION
     """
 
+    """
+    TODO: Total weight
+    TODO: Remove other currency
+    TODO: Add same item different weight?
+    """
     @commands.command(name="inventory")
     async def _inventory_list(self, ctx: commands.Context):
         # Attempt to load our inventory
@@ -133,15 +138,23 @@ class InventoryManager(Module, GameStateListener):
         for key, value in currency.items():
             long_message.add("\t" + str(value) + " " + key)
 
+        # Total Weight
+        long_message.add(None)
+        long_message.add("The total weight of your inventory is: " + str(await ctx.inventory.get_total_weight()))
+
         async with ctx.typing():
             for message in long_message:
                 await ctx.send(message)
 
-    @commands.command(name="inventory:store:gold")
+    @commands.command(name="inventory:add:gold")
     async def _store_gold(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
             return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("gold", amount, 0)
@@ -150,11 +163,39 @@ class InventoryManager(Module, GameStateListener):
         # Save the changed inventory
         return await self.save_inventory(ctx, ctx.inventory)
 
-    @commands.command(name="inventory:store:silver")
+    @commands.command(name="inventory:remove:gold")
+    async def _remove_gold(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
+
+        # Add the item to our inventory
+        try:
+            if await ctx.inventory.remove("gold", amount):
+                await ctx.send("`You have removed " + str(amount) + " gold pieces`")
+                return await self.save_inventory(ctx, ctx.inventory)
+            else:
+                return await ctx.send("`I cannot remove the requested gold as either it is not in your stash or there is not enough!`")
+        except CurrencyError:
+            return await ctx.send("`You currently do not have enough money to do what you are trying to do!`")
+
+    @commands.command(name="inventory:add:silver")
     async def _store_silver(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
             return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("silver", amount, 0)
@@ -163,11 +204,35 @@ class InventoryManager(Module, GameStateListener):
         # Save the changed inventory
         return await self.save_inventory(ctx, ctx.inventory)
 
-    @commands.command(name="inventory:store:copper")
+    @commands.command(name="inventory:remove:silver")
+    async def _remove_silver(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
+
+        # Add the item to our inventory
+        try:
+            if await ctx.inventory.remove("silver", amount):
+                await ctx.send("`You have removed " + str(amount) + " silver pieces`")
+                return await self.save_inventory(ctx, ctx.inventory)
+            else:
+                return await ctx.send("`I cannot remove the requested silver as either it is not in your stash or there is not enough!`")
+        except CurrencyError:
+            return await ctx.send("`You currently do not have enough money to do what you are trying to do!`")
+
+    @commands.command(name="inventory:add:copper")
     async def _store_copper(self, ctx: commands.Context, *, amount: int):
         # Attempt to load our inventory
         if not ctx.inventory:
             return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
 
         # Add the item to our inventory
         item = await ctx.inventory.add_object_to_inventory("copper", amount, 0)
@@ -176,7 +241,27 @@ class InventoryManager(Module, GameStateListener):
         # Save the changed inventory
         return await self.save_inventory(ctx, ctx.inventory)
 
-    @commands.command(name="inventory:store")
+    @commands.command(name="inventory:remove:copper")
+    async def _remove_copper(self, ctx: commands.Context, *, amount: int):
+        # Attempt to load our inventory
+        if not ctx.inventory:
+            return await ctx.send("`It looks like you don't have access to any inventories with this guild. Ensure that a game is running!`")
+
+        # Negative number
+        if amount < 0:
+            return await ctx.send("`Fuck off Tom`")
+
+        # Add the item to our inventory
+        try:
+            if await ctx.inventory.remove("copper", amount):
+                await ctx.send("`You have removed " + str(amount) + " copper pieces`")
+                return await self.save_inventory(ctx, ctx.inventory)
+            else:
+                return await ctx.send("`I cannot remove the requested copper as either it is not in your stash or there is not enough!`")
+        except CurrencyError:
+            return await ctx.send("`You currently do not have enough money to do what you are trying to do!`")
+
+    @commands.command(name="inventory:add")
     async def _inventory_store(self, ctx: commands.Context, *, info: str):
         # Attempt to load our inventory
         if not ctx.inventory:

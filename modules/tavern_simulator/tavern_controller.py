@@ -58,8 +58,9 @@ class Tavern:
         self.possible_upgrades = dict()
         self.possible_contracts = dict()
         self.possible_staff_types = dict()
-        self.active_staff = list()
+        self.active_upgrades = list()
         self.active_contracts = list()
+        self.active_employees = list()
 
         # Current non-serialized properties
         self.provided = dict()
@@ -87,8 +88,14 @@ class Tavern:
         self.possible_upgrades.clear()
         self.possible_contracts.clear()
         self.possible_staff_types.clear()
-        self.active_staff.clear()
+        self.active_upgrades.clear()
         self.active_contracts.clear()
+        self.active_employees.clear()
+
+        # Validate our data pack
+        if self.tavern_status.get_data_pack_name() != "" and self.tavern_status.get_data_pack_name() != data_pack.get_name():
+            print("Cannot load the provided tavern as the specifed data pack is not present.")
+            return
         self.data_pack = data_pack
 
         # Apply to our tavern_status
@@ -118,11 +125,14 @@ class Tavern:
     def get_properties(self):
         return self.properties
 
-    def get_staff(self):
-        return self.active_staff
+    def get_upgrades(self):
+        return self.active_upgrades
 
     def get_contracts(self):
         return self.active_contracts
+
+    def get_employees(self):
+        return self.active_employees
 
     def get_most_recent_customer_history(self):
         return self.tavern_status.get_customer_history_for_week(-1)
@@ -213,7 +223,7 @@ class Tavern:
         if not isinstance(staff, Employee):
             staff = self.data_pack.get_employee_archetype(staff)
         await self.__apply_state(staff)
-        self.active_staff.append(StaffMember(name, staff, daily_cost))
+        self.active_employees.append(StaffMember(name, staff, daily_cost))
 
     async def __apply_contract(self, contract, start_date):
         if not isinstance(contract, Contract):
@@ -225,6 +235,7 @@ class Tavern:
         if not isinstance(upgrade, Upgrade):
             upgrade = self.data_pack.get_upgrade(upgrade)
         await self.__apply_state(upgrade)
+        self.active_upgrades.append(upgrade)
 
     async def __can_apply(self, appliable):
         # Gather the prerequisites

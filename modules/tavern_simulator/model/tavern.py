@@ -85,6 +85,9 @@ class TavernStatus:
     def set_name(self, name):
         self.name = name
 
+    def get_data_pack_name(self):
+        return self.data_pack_name
+
     def set_data_pack(self, data_pack):
         self.data_pack_name = data_pack.get_name()
         self.data_pack_path = data_pack.get_path()

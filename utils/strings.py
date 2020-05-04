@@ -9,8 +9,20 @@ def find_urls(string):
 
 
 def get_trailing_number(s):
-    m = re.search(r'\d+$', s)
-    return int(m.group()) if m else None
+    m = re.search(r'\d*\.\d+|\d+$', s)
+    if not m:
+        m = re.search(r'\d+$', s)
+        if m:
+            return int(m.group())
+
+    else:
+        return float(m.group())
+
+    return None
+
+
+def get_trailing_float(s):
+    return float(m.group()) if m else None
 
 
 def replace_count_reverse(source, target, replacement, count):
