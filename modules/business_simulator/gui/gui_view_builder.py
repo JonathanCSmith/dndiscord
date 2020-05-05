@@ -1,6 +1,6 @@
-from tkinter import LabelFrame, Label, W, NSEW
+from tkinter import LabelFrame, Label, W, NSEW, Button, Frame
 
-from modules.tavern_simulator.model.new_data_pack import Upgrade, BusinessStateModifier, ModifiesAttribute, ServiceOffered, Customer, Contract, Employee
+from modules.business_simulator.model.data_pack import Improvement, BusinessStateModifier, ModifiesAttribute, ServiceOffered, Customer, Contract, Employee
 
 
 def build_customer_view(parent, customer):
@@ -104,29 +104,35 @@ def build_service_view(parent, service):
     return obj_frame
 
 
-def build_upgrade_view(parent, upgrade):
-    obj_frame = build_and_add_business_state_modifier(parent, upgrade)
+def build_improvement_view(parent, improvement, interaction=False, purchase_handler=None):
+    obj_frame = build_and_add_business_state_modifier(parent, improvement)
 
-    upgrade_frame = LabelFrame(obj_frame, text="Upgrade Properties")
-    cost_label = Label(upgrade_frame, text="Cost:")
+    improvement_frame = LabelFrame(obj_frame, text="Improvement Properties")
+    cost_label = Label(improvement_frame, text="Cost:")
     cost_label.grid(row=0, column=0, sticky=NSEW)
     cost_label.config(anchor="w")
-    cost_value = Label(upgrade_frame, text=str(upgrade.cost))
+    cost_value = Label(improvement_frame, text=str(improvement.cost))
     cost_value.grid(row=0, column=1, sticky=NSEW)
     cost_value.config(anchor="w")
-    duration_label = Label(upgrade_frame, text="Build Time:")
+    duration_label = Label(improvement_frame, text="Build Time:")
     duration_label.grid(row=1, column=0, sticky=NSEW)
     duration_label.config(anchor="w")
-    duration_value = Label(upgrade_frame, text=str(upgrade.duration))
+    duration_value = Label(improvement_frame, text=str(improvement.duration))
     duration_value.grid(row=1, column=1, sticky=NSEW)
     duration_value.config(anchor="w")
-    upgrade_frame.pack(expand=1, fill="x")
+    improvement_frame.pack(expand=1, fill="x")
+
+    # If we want a purchase button
+    if interaction:
+        if purchase_handler is not None:
+            purchase = Button(obj_frame, text="Purchase", command=lambda: purchase_handler.purchase_improvement(improvement))
+            purchase.pack(expand=0)
 
     obj_frame.pack(expand=1, fill="x")
     return obj_frame
 
 
-def build_contract_view(parent, contract):
+def build_contract_view(parent, contract, interaction=False, purchase_handler=None):
     obj_frame = build_and_add_business_state_modifier(parent, contract)
 
     properties_frame = LabelFrame(obj_frame, text="Contract Properties")
@@ -144,11 +150,17 @@ def build_contract_view(parent, contract):
     duration_value.config(anchor="w")
     properties_frame.pack(expand=1, fill="x")
 
+    # If we want a purchase button
+    if interaction:
+        if purchase_handler is not None:
+            purchase = Button(obj_frame, text="Purchase", command=lambda: purchase_handler.purchase_contract(contract))
+            purchase.pack(expand=0)
+
     obj_frame.pack(expand=1, fill="x")
     return obj_frame
 
 
-def build_employee_view(parent, employee):
+def build_employee_view(parent, employee, interaction=False, purchase_handler=None):
     obj_frame = build_and_add_business_state_modifier(parent, employee)
 
     properties_frame = LabelFrame(obj_frame, text="Employee Properties")
@@ -159,6 +171,12 @@ def build_employee_view(parent, employee):
     cost_value.grid(row=0, column=1, sticky=NSEW)
     cost_value.config(anchor="w")
     properties_frame.pack(expand=1, fill="x")
+
+    # If we want a purchase button
+    if interaction:
+        if purchase_handler is not None:
+            purchase = Button(obj_frame, text="Purchase", command=lambda: purchase_handler.purchase_employee(employee))
+            purchase.pack(expand=0)
 
     obj_frame.pack(expand=1, fill="x")
     return obj_frame
@@ -182,13 +200,13 @@ def build_and_add_business_state_modifier(parent, obj: BusinessStateModifier):
     row_count = 0
     for key, condition in obj.get_prerequisites().items():
         condition_key = Label(prerequisites_frame, text=condition.get_key())
-        condition_key.grid(row=row_count, column=1, sticky=NSEW)
+        condition_type = Label(prerequisites_frame, text=condition.get_type())  # TODO
+        condition_type.grid(row=row_count, column=1, sticky=NSEW)
+        condition_type.config(anchor="w")
+        condition_key.grid(row=row_count, column=2, sticky=NSEW)
         condition_key.config(anchor="w")
         condition_value = Label(prerequisites_frame, text=condition.get_value())  # TODO
-        condition_value.grid(row=row_count, column=2, sticky=NSEW)
-        condition_value.config(anchor="w")
-        condition_type = Label(prerequisites_frame, text=condition.get_type())  # TODO
-        condition_type.grid(row=row_count, column=3, sticky=NSEW)
+        condition_value.grid(row=row_count, column=3, sticky=NSEW)
         condition_value.config(anchor="w")
         row_count += 1
     prerequisites_frame.pack(expand=1, fill="x")
@@ -204,13 +222,15 @@ def build_and_add_business_state_modifier(parent, obj: BusinessStateModifier):
         attribute_key = Label(provided_frame, text=attribute.get_key())
         attribute_key.grid(row=row_count, column=1, sticky=NSEW)
         attribute_key.config(anchor="w")
-        attribute_value = Label(provided_frame, text=attribute.get_value())  # TODO
-        attribute_value.grid(row=row_count, column=2, sticky=NSEW)
-        attribute_value.config(anchor="w")
+        cc = 2
         if isinstance(attribute, ModifiesAttribute):
             attribute_type = Label(provided_frame, text=attribute.get_type())  # TODO
-            attribute_type.grid(row=row_count, column=3, sticky=NSEW)
+            attribute_type.grid(row=row_count, column=cc, sticky=NSEW)
             attribute_type.config(anchor="w")
+            cc+=1
+        attribute_value = Label(provided_frame, text=attribute.get_value())  # TODO
+        attribute_value.grid(row=row_count, column=cc, sticky=NSEW)
+        attribute_value.config(anchor="w")
         row_count += 1
     provided_frame.pack(expand=1, fill="x")
 
@@ -218,9 +238,23 @@ def build_and_add_business_state_modifier(parent, obj: BusinessStateModifier):
     return obj_frame
 
 
+def build_active_view(parent, obj):
+    contract_label = Label(parent, text=str(obj))
+    contract_label.pack(expand=0)
+    contract_label.config(anchor="w")
+
+
+def build_sales_view(parent, obj):
+    return
+
+
+def build_customers_view(parent, obj):
+    return
+
+
 def build_and_add_business_state_modifier_view(parent, obj):
-    if isinstance(obj, Upgrade):
-        return build_upgrade_view(parent, obj)
+    if isinstance(obj, Improvement):
+        return build_improvement_view(parent, obj)
     elif isinstance(obj, ServiceOffered):
         return build_service_view(parent, obj)
     elif isinstance(obj, Customer):
@@ -275,19 +309,63 @@ def build_data_pack_overview(parent, data_pack):
 
 
 def build_data_pack_items_view(parent, items):
-    for upgrade in items:
-        build_and_add_business_state_modifier_view(parent, upgrade)
+    for improvement in items:
+        build_and_add_business_state_modifier_view(parent, improvement)
 
 
 def build_status_view(parent, business):
     # Core properties
-    business_properties = LabelFrame(parent, text="Business Properties", background="green")
+    business_properties = LabelFrame(parent, text="Business Properties")
     for key, value in business.get_properties().items():
         build_property_view_gui(business_properties, key, value)
     business_properties.pack(expand=1, fill="x")
 
-    # Upgrades
-    applied_upgrades = LabelFrame(parent, text="Business Upgrades", background="green")
-    for item in business.get_upgrades():
-        build_upgrade_view(applied_upgrades, item)
-    applied_upgrades.pack(expand=1, fill="x")
+    # Improvements
+    applied_improvements = LabelFrame(parent, text="Business Improvements")
+    for item in business.get_improvements():
+        build_active_view(applied_improvements, item)
+    applied_improvements.pack(expand=1, fill="x")
+
+    # Active Contracts
+    active_contracts = LabelFrame(parent, text="Active Contracts")
+    for item in business.get_contracts():
+        build_active_view(active_contracts, item)
+    active_contracts.pack(expand=1, fill="x")
+
+    # Employees
+    active_employees = LabelFrame(parent, text="Active Employees")
+    for item in business.get_employees():
+        build_active_view(active_employees, item)
+    active_employees.pack(expand=1, fill="x")
+
+    # Sales
+    sales = LabelFrame(parent, text="Sales")
+    for item in business.get_most_recent_sales_history():
+        build_sales_view(sales, item)
+    sales.pack(expand=1, fill="x")
+
+    # Customers
+    customers = LabelFrame(parent, text="Customers")
+    for item in business.get_most_recent_customer_history():
+        build_customers_view(customers, item)
+    customers.pack(expand=1, fill="x")
+
+
+def build_purchaseable_view(callback_handler, parent, business):
+    # Improveable
+    improveable = LabelFrame(parent, text="Purchaseable Improvements")
+    for item in business.get_improveable():
+        build_improvement_view(improveable, item, interaction=True, purchase_handler=callback_handler)
+    improveable.pack(expand=1, fill="x")
+
+    # Contracts
+    contractable = LabelFrame(parent, text="Purchaseable Contracts")
+    for item in business.get_contractable():
+        build_contract_view(contractable, item, interaction=True, purchase_handler=callback_handler)
+    contractable.pack(expand=1, fill="x")
+
+    # Staff
+    hireable = LabelFrame(parent, text="Hireable Employee Types")
+    for item in business.get_hireable():
+        build_employee_view(hireable, item, interaction=True, purchase_handler=callback_handler)
+    hireable.pack(expand=1, fill="x")

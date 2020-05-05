@@ -11,13 +11,13 @@
 11) [DONE] GM apply available upgrades
 12) [DONE] GM List contracts and Contract purchase
 13) [DONE] Players list staff and GM Staff purchase
-14) Full Tier 1 test
-15) Reasses player info (text based 'what do i need to get this')
-16) Reasses removing staff / contracts
+14) [DONE] Full Tier 1 state machine test
+15) [DONE] Reasses player info (text based 'what do i need to get this')
+16) [DONE] Reasses removing staff / contracts
 17) Move to per day sims
 18) Tavern test basic simulations
-19) Tavern -> business impact assessment
-20) Multi business
+19) [DONE] Tavern -> business impact assessment
+20) [DONE] Multi business
 21) Game Channels
 22) Handbook / Campaign management data packs and common data pack framework?
 23) Handbook implementation - data pack and query interface (users & api)
@@ -55,6 +55,11 @@ Randoms:
     [DONE] Business datapack file names need updating
     [DONE] Validation of the expected data pack for a save?!
     [DONE] Tavern overwriting
+    [DONE] Finish inventory:add so that it can handle float weights
+    [DONE] Currency as a data pack / integration?
+    [DONE] Upgrade -> Improvement
+    [DONE] Staff -> Employees
+    [DONE] Translation manager auto add on data pack add
 
     [TODO] up enter
     [TODO] tab complete
@@ -65,18 +70,19 @@ Randoms:
     [TODO] Fantasy Staff names (handbook data pack?)
     [TODO] More than one business
     [TODO] Furniture should not be in building, but room props
-    [TODO] Currency as a data pack / integration?
     [TODO] Calendar + Currency etc in campaign management data pack???!
     [TODO] Datapacks as python?
     [TODO] Earmark key datapack tags somewhere!
     [TODO] Validate some of our tags?
-    [TODO] Tavern reset
-    [TODO] Finish inventory:add so that it can handle float weights
-    [TODO] Tavern viewer for separate debugging.
+    [TODO] Business reset
+    [TODO] Business viewer for separate debugging.
     [TODO] End of day simulation
     [TODO] Speed build and game day cycling in gui
     [TODO] Day pass in business
-    [TODO] Translation manager auto add on data pack add
+    [TODO] Business gui, don't like the two menu system.
+    [TODO] Better GUI Modality - data pack vs Tavern sim vs multiple businesses?
+    [TODO] Sessions
+    [TODO] Translations
 
 
 Notes:

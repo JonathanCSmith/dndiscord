@@ -9,7 +9,7 @@ from modules.game.game_master import GameMaster
 from modules.harpers.harpers_module import Harpers
 from modules.reminder.reminder_module import ReminderManager
 from modules.services.services_module import ServicesManager
-from modules.tavern_simulator.tavern_module import TavernSimulator
+from modules.business_simulator.business_module import BusinessSimulator
 from utils import dice, data
 from utils.translations import TranslationSource, TranslationManager
 
@@ -48,7 +48,7 @@ class DNDiscordDataStore:
 class DNDiscordBot:
     is_music_module_enabled = True
     is_inventory_module_enabled = True
-    is_tavern_module_enabled = True
+    is_business_module_enabled = True
     is_party_management_enabled = True
     is_services_module_enabled = True
     is_calendar_module_enabled = True
@@ -98,10 +98,10 @@ class DNDiscordBot:
 
         # Campaign management
 
-        # Check for our tavern module
-        if DNDiscordBot.is_tavern_module_enabled:
-            tavern_module = TavernSimulator(self)
-            self.add_module(tavern_module)
+        # Check for our business module
+        if DNDiscordBot.is_business_module_enabled:
+            business_module = BusinessSimulator(self)
+            self.add_module(business_module)
 
     def add_module(self, module):
         self.bot.add_cog(module)

@@ -1,241 +1,287 @@
-from modules.tavern_simulator.model.new_data_pack import BusinessStateModifier, FixedAttribute, DataPack, Employee, Upgrade, Contract
-from modules.tavern_simulator.model.tavern import TavernStatus, EmployeeEntry, ContractEntry
+from modules.business_simulator.model.data_pack import FixedAttribute, BusinessDataPack, Employee, Improvement, Contract
+from modules.business_simulator.model.business_model import BusinessStatus
 
 """
-TODO: When saving the state it may be worth remembering who edited it somehow? so that if we block an upgrade mid path we can remove all relevant upgrades...
+TODO: When saving the state it may be worth remembering who edited it somehow? so that if we block an improvement mid path we can remove all relevant improvements...
 """
 
 
-class StaffMember:
-    def __init__(self, name, type, wages):
-        self.name = name
-        self.type = type
-        self.wages = wages
-
-
-class ActiveContract:
-    def __init__(self, type, start_date):
-        self.type = type
-        self.start_date = start_date
-
-
-# Design goal: Simulate a week (tenday) for a D&D Tavern!
-class Tavern:
+class BusinessController:
     @classmethod
-    async def create_tavern(cls, manager, game_master, ctx, path_modifier, data_pack):
-        tavern = Tavern()
-        await tavern.set_data_pack(data_pack)
-        await game_master.save_game_data(ctx, path_modifier, "tavern.json", tavern.get_tavern_status())
-        return tavern
+    async def create_business(cls, game_master, ctx, data_pack, name):
+        business = BusinessController(name)
+        await business.set_data_pack(data_pack)
+        await game_master.save_game_data(ctx, "business", name, business.get_business_status())
+        return business
 
     @classmethod
-    async def load_tavern(cls, manager, game_master, ctx, path_modifier):
-        # Load our tavern data
-        tavern_status = await game_master.load_game_data(ctx, path_modifier, "tavern.json")
-        if not tavern_status:
+    async def load_business(cls, manager, game_master, ctx, business_name):
+        # Load our business
+        business_status = await game_master.load_game_data(ctx, "businesses", business_name)
+        if not business_status:
             return None
 
-        data_pack = await DataPack.load_data_pack(manager, ctx, tavern_status.data_pack_path, tavern_status.data_pack_name)
+        # Check we have data packs available
+        data_pack = await BusinessDataPack.load(manager, ctx, business_status.data_pack_path)
         if not data_pack:
-            return "`Could not load the data pack`"
+            return "`Could not load the data pack for business: " + business_name + "`"
 
-        # Create our tavern
-        tavern = Tavern(tavern_status=tavern_status)
-        await tavern.set_data_pack(data_pack)
-        return tavern
+        # Create our business
+        business = BusinessController(business_status=business_status)
+        await business.set_data_pack(data_pack)
+        return business
 
-    def __init__(self, tavern_status=None):
+    def __init__(self, name=None, business_status=None):
         self.data_pack = None
 
         # Create if new
-        if not tavern_status:
-            self.tavern_status = TavernStatus()
+        if business_status is None and name is None:
+            raise RuntimeError("Cannot create a business without a name or an existing status....")
+
+        elif not business_status:
+            # IF the idiot calls their business <guild>+<game>_business we would have a problem
+
+            self.business_status = BusinessStatus(name)
+
         else:
-            self.tavern_status = tavern_status
+            self.business_status = business_status
+
+        # Business state holders
+        self.recorded_active_state_modifiers = dict()
+        self.recorded_inactive_state_modifiers = dict()
+        self.recorded_removed_state_modifiers = dict()
 
         # The business state descriptors
         self.properties = dict()
-        self.possible_upgrades = dict()
-        self.possible_contracts = dict()
-        self.possible_staff_types = dict()
-        self.active_upgrades = list()
+        self.implied_inactive_state_modifiers = list()
+        self.active_improvements = list()
         self.active_contracts = list()
         self.active_employees = list()
+        self.possible_improvements = list()
+        self.possible_contracts = list()
+        self.possible_employee_types = list()
+        self.available_services = list()
+        self.available_customers = list()
 
         # Current non-serialized properties
         self.provided = dict()
         self.max_occupancy = 0
         self.current_services_offered = dict()
-        self.visiting_patrons = list()
-        self.maximum_patrons_satisfied = dict()
+        self.visiting_customers = list()
+        self.maximum_customers_satisfied = dict()
         self.sales = list()
 
     """
-    Tavern Data
+    Business Data
     """
 
     def get_name(self):
-        return self.tavern_status.get_name()
+        return self.business_status.get_name()
 
     def set_name(self, name):
-        self.tavern_status.set_name(name)
+        self.business_status.set_name(name)
 
     def get_data_pack(self):
         return self.data_pack
 
     async def set_data_pack(self, data_pack):
-        self.properties.clear()
-        self.possible_upgrades.clear()
-        self.possible_contracts.clear()
-        self.possible_staff_types.clear()
-        self.active_upgrades.clear()
-        self.active_contracts.clear()
-        self.active_employees.clear()
+        self.recorded_active_state_modifiers.clear()
+        self.recorded_inactive_state_modifiers.clear()
+        self.recorded_removed_state_modifiers.clear()
+        self.__clear_state_views()
 
         # Validate our data pack
-        if self.tavern_status.get_data_pack_name() != "" and self.tavern_status.get_data_pack_name() != data_pack.get_name():
-            print("Cannot load the provided tavern as the specifed data pack is not present.")
+        if self.business_status.get_data_pack_name() != "" and self.business_status.get_data_pack_name() != data_pack.get_name():
+            print("Cannot load the provided business as the specifed data pack is not present.")
             return
         self.data_pack = data_pack
 
-        # Apply to our tavern_status
-        self.tavern_status.set_data_pack(data_pack)
+        # Apply to our business
+        self.business_status.set_data_pack(data_pack)
 
         # Apply the data pack's initial
         initials = self.data_pack.get_initial_states()
         for initial in initials:
-            await self.__apply_state(initial)
+            self.recorded_active_state_modifiers[initial.get_key()] = initial.get_key()
 
-        # Run through our purchase history
-        purchase_history = self.tavern_status.get_purchase_history()
-        for item in purchase_history:
-            if isinstance(item, EmployeeEntry):
-                await self.__hire_employee(item.staff_name, item.staff_archetype, item.daily_hire_cost)
-            elif isinstance(item, ContractEntry):
-                await self.__apply_contract(item.contract_type, item.start_date)
-            else:
-                await self.__apply_upgrade(item.upgrade_type)
+        # Re-play our history
+        history = self.business_status.get_history()
+        for item in history.values():
+            item.apply(self)
 
         # Get all of our possible things we could apply
-        await self.add_all_current_purchaseables()
+        await self.recalculate_state_views()
 
-    def get_tavern_status(self):
-        return self.tavern_status
+    def get_business_status(self):
+        return self.business_status
 
     def get_properties(self):
         return self.properties
 
-    def get_upgrades(self):
-        return self.active_upgrades
+    def get_improveable(self):
+        return self.possible_improvements
+
+    def get_improvements(self):
+        return self.active_improvements
+
+    def get_contractable(self):
+        return self.possible_contracts
 
     def get_contracts(self):
         return self.active_contracts
 
+    def get_hireable(self):
+        return self.possible_employee_types
+
     def get_employees(self):
         return self.active_employees
 
+    def get_interested_customers(self):
+        return self.available_customers
+
     def get_most_recent_customer_history(self):
-        return self.tavern_status.get_customer_history_for_week(-1)
+        return self.business_status.get_customer_history_for_week(-1)
+
+    def get_services_offered(self):
+        return self.available_services
 
     def get_most_recent_sales_history(self):
-        return self.tavern_status.get_sales_history_for_week(-1)
+        return self.business_status.get_sales_history_for_week(-1)
 
-    def get_upgradeable(self):
-        return self.possible_upgrades.values()
-
-    def get_contractable(self):
-        return self.possible_contracts.values()
-
-    def get_hireable(self):
-        return self.possible_staff_types.values()
-
-    async def save(self, game_master, ctx, path_modifier):
-        await game_master.save_game_data(ctx, path_modifier, "tavern.json", self.tavern_status)
+    async def save(self, game_master, ctx):
+        await game_master.save_game_data(ctx, "businesses", self.get_name(), self.business_status)
 
     """
-    Tavern Simulation Mechanics
+    Business Simulation Mechanics
     """
+    def __clear_state_views(self):
+        self.active_improvements.clear()
+        self.active_contracts.clear()
+        self.active_employees.clear()
+        self.available_services.clear()
+        self.available_customers.clear()
+        self.properties.clear()
+        self.implied_inactive_state_modifiers.clear()
+        self.possible_improvements.clear()
+        self.possible_contracts.clear()
+        self.possible_employee_types.clear()
 
-    async def add_all_current_purchaseables(self):
-        self.possible_upgrades.clear()
-        all_purchaseables = self.data_pack.get_upgrades()
+    async def recalculate_state_views(self):
+        self.__clear_state_views()
+
+        # Work through our actives and assess if they can still function
+        processing = True
+        unchecked = self.recorded_active_state_modifiers.copy()
+        while processing:
+            cant_apply = dict()
+            for key, value in unchecked.items():
+                item = self.data_pack.get_state_modifier(value)
+
+                if await self.__can_apply(item):
+                    if isinstance(item, Improvement):
+                        self.active_improvements.append(self.business_status.get_historical_purchase(key))
+                    elif isinstance(item, Contract):
+                        self.active_contracts.append(self.business_status.get_historical_purchase(key))
+                    elif isinstance(item, Employee):
+                        self.active_employees.append(self.business_status.get_historical_purchase(key))
+
+                    await self.__apply_state_modifier(item)
+                else:
+                    cant_apply[key] = item
+
+            if len(unchecked) == len(cant_apply):
+                self.implied_inactive_state_modifiers = cant_apply
+                processing = False
+            else:
+                unchecked = cant_apply
+
+        # Determine purchaseables
+        all_purchaseables = self.data_pack.get_improvements()
         for purchaseable in all_purchaseables:
             if await self.__can_apply(purchaseable):
-                self.possible_upgrades[purchaseable.unique_key] = purchaseable
-
-        all_purchaseables = self.data_pack.get_employee_archetypes()
-        for purchaseable in all_purchaseables:
-            if await self.__can_apply(purchaseable):
-                self.possible_staff_types[purchaseable.unique_key] = purchaseable
+                self.possible_improvements.append(purchaseable)
 
         all_purchaseables = self.data_pack.get_contracts()
         for purchaseable in all_purchaseables:
             if await self.__can_apply(purchaseable):
-                self.possible_contracts[purchaseable.unique_key] = purchaseable
+                self.possible_contracts.append(purchaseable)
 
-    async def apply_upgrade(self, item_key, amount):
-        if item_key not in self.possible_upgrades:
-            print("There is something wrong - someone told us we could load: " + item_key + " but the data pack could not find it!")
+        all_purchaseables = self.data_pack.get_employee_archetypes()
+        for purchaseable in all_purchaseables:
+            if await self.__can_apply(purchaseable):
+                self.possible_employee_types.append(purchaseable)
+
+        # Available services
+        all_services = self.data_pack.get_services()
+        for service in all_services:
+            if await self.__can_apply(service):
+                self.available_services.append(service)
+
+        # Available customers
+        all_customers = self.data_pack.get_customers()
+        for customer in all_customers:
+            if await self.__can_apply(customer):
+                self.available_customers.append(customer)
+
+    async def _record_active_state_modifiers(self, key, state_modifier):
+        if key in self.recorded_inactive_state_modifiers:
+            del self.recorded_inactive_state_modifiers[key]
+
+        if key in self.recorded_removed_state_modifiers:
+            del self.recorded_removed_state_modifiers[key]
+
+        self.recorded_active_state_modifiers[key] = state_modifier
+
+    async def _deactivate_state_modifier(self, key, state_modifier):
+        if key in self.recorded_active_state_modifiers:
+            del self.recorded_active_state_modifiers[key]
+
+        if key in self.recorded_removed_state_modifiers:
+            del self.recorded_removed_state_modifiers[key]
+
+        self.recorded_inactive_state_modifiers[key] = state_modifier
+
+    async def _remove_state_modifier(self, key, state_modifier):
+        if key in self.recorded_active_state_modifiers:
+            del self.recorded_active_state_modifiers[key]
+
+        if key in self.recorded_inactive_state_modifiers:
+            del self.recorded_inactive_state_modifiers[key]
+
+        self.recorded_removed_state_modifiers[key] = state_modifier
+
+    async def apply_improvement(self, improvement, amount, current_day):
+        if improvement not in self.possible_improvements:
+            print("There is something wrong - someone told us we could load: " + improvement + " but the data pack could not find it!")
             return False
 
-        # Get the item in question
-        modifier = self.possible_upgrades[item_key]
-
         # Apply it to our history and our current controller
-        self.tavern_status.purchase(modifier, amount=amount)
-        await self.__apply_upgrade(modifier)
+        await self.business_status.purchase_improvement(self, improvement, current_day, amount)
 
         # Recalc what purchases can be applied
-        await self.add_all_current_purchaseables()
-        return True
+        await self.recalculate_state_views()
 
-    async def apply_contract(self, item_key, amount, start_date):
-        if item_key not in self.possible_upgrades:
-            print("There is something wrong - someone told us we could load: " + item_key + " but the data pack could not find it!")
+    async def apply_contract(self, contract, amount, start_date):
+        if contract not in self.possible_contracts:
+            print("There is something wrong - someone told us we could load: " + contract + " but the data pack could not find it!")
             return
 
-        # Get the item in question
-        modifier = self.possible_upgrades[item_key]
-
         # Apply it to our history and our current controller
-        await self.tavern_status.purchase(modifier, amount=amount, start_date=start_date)
-        await self.__apply_contract(modifier)
+        await self.business_status.purchase_contract(self, contract, start_date, negotiated_amount=amount)
 
         # Recalc what purchases can be applied
-        await self.add_all_current_purchaseables()
+        await self.recalculate_state_views()
 
-    async def hire_staff(self, item_key, name):
-        if item_key not in self.possible_upgrades:
-            print("There is something wrong - someone told us we could load: " + item_key + " but the data pack could not find it!")
+    async def hire_employee(self, employee_type, name, start_date):
+        if employee_type not in self.possible_employee_types:
+            print("There is something wrong - someone told us we could load: " + employee_type + " but the data pack could not find it!")
             return
 
-        # Get the item in question
-        modifier = self.possible_upgrades[item_key]
-
         # Apply it to our history and our current controller
-        await self.tavern_status.purchase(modifier, name=name)
-        await self.__apply_upgrade(modifier)
+        await self.business_status.hire_employee(self, employee_type, name, start_date)
 
         # Recalc what purchases can be applied
-        await self.add_all_current_purchaseables()
-
-    async def __hire_employee(self, name, staff, daily_cost):
-        if not isinstance(staff, Employee):
-            staff = self.data_pack.get_employee_archetype(staff)
-        await self.__apply_state(staff)
-        self.active_employees.append(StaffMember(name, staff, daily_cost))
-
-    async def __apply_contract(self, contract, start_date):
-        if not isinstance(contract, Contract):
-            upgrade = self.data_pack.get_contract(contract)
-        await self.__apply_state(contract)
-        self.active_contracts.append(ActiveContract(contract, start_date))
-
-    async def __apply_upgrade(self, upgrade):
-        if not isinstance(upgrade, Upgrade):
-            upgrade = self.data_pack.get_upgrade(upgrade)
-        await self.__apply_state(upgrade)
-        self.active_upgrades.append(upgrade)
+        await self.recalculate_state_views()
 
     async def __can_apply(self, appliable):
         # Gather the prerequisites
@@ -324,7 +370,7 @@ class Tavern:
 
         return True
 
-    async def __apply_state(self, state: BusinessStateModifier):
+    async def __apply_state_modifier(self, state):
         for key, attribute in state.provides.items():
             await self.__apply_attribute(attribute)
 
@@ -332,7 +378,7 @@ class Tavern:
         if isinstance(attribute, FixedAttribute):
             self.properties[attribute.get_key()] = attribute.get_value()
         else:
-            if attribute.get_key() not in self.properties[attribute.get_key()]:
+            if attribute.get_key() not in self.properties:
                 self.properties[attribute.get_key()] = attribute.get_value()
                 return
 
@@ -386,16 +432,16 @@ class Tavern:
     #         return
     #
     #     if isinstance(purchase, Purchase):
-    #         self.tavern_status.add_purchase(purchase)
+    #         self.business_status.add_purchase(purchase)
     #
     #     elif isinstance(purchase, Staff):
-    #         self.tavern_status.add_staff(purchase)
+    #         self.business_status.add_staff(purchase)
     #
     #     self.provided.update(purchase.get_provided())
     #
     # def add_purchase(self, purchase):
-    #     # TODO Inform tavern status for logging
-    #     self.tavern_status.purchase(purchase)
+    #     # TODO Inform business status for logging
+    #     self.business_status.purchase(purchase)
     #     self.__apply_state(purchase)
     #
     # def hire_staff(self, staff, amount=1):
@@ -404,28 +450,28 @@ class Tavern:
     #
     # def clear(self):
     #     # TODO: THIS IS NOT THE SAME
-    #     self.tavern_status.clear()
+    #     self.business_status.clear()
     #
     # async def validate(self):
     #     # Gather our purchases
     #     all_purchases = list()
     #
     #     # Check purchases
-    #     possible_purchases = self.tavern_status.get_purchases()
+    #     possible_purchases = self.business_status.get_purchases()
     #     for possible_purchase in possible_purchases:
-    #         purchase = self.data_pack.get_upgrade(possible_purchase)
+    #         purchase = self.data_pack.get_improvement(possible_purchase)
     #         if purchase is not None and self.provides_for(purchase):
     #             all_purchases.append(purchase)
     #
     #     # Check staff
-    #     possible_staff = self.tavern_status.get_staff().keys()
+    #     possible_staff = self.business_status.get_staff().keys()
     #     for possible_staff_member in possible_staff:
     #         staff = self.data_pack.get_staff_archetype(possible_staff_member)
     #         if staff is not None and self.provides_for(staff):
     #             all_purchases.append(staff)
     #
     #     # Clear our status
-    #     self.tavern_status.clear()
+    #     self.business_status.clear()
     #
     #     # Now validate whether or not our purchases are viable
     #     remaining_purchases = len(all_purchases)
@@ -529,9 +575,9 @@ class Tavern:
     #
     # def determine_max_occupancy(self):
     #     max_occupancy_modifiers = list()
-    #     for upgrade_key in self.tavern_status.get_purchases():
-    #         upgrade = self.data_pack.get_upgrade(upgrade_key)
-    #         max_occupancy_modifiers.extend(upgrade.get_provided_value(Patron.maximum_occupancy_limit_tag))
+    #     for improvement_key in self.business_status.get_purchases():
+    #         improvement = self.data_pack.get_improvement(improvement_key)
+    #         max_occupancy_modifiers.extend(improvement.get_provided_value(Patron.maximum_occupancy_limit_tag))
     #     self.set_maximum_occupancy(sum(max_occupancy_modifiers))
     #
     # def determine_available_services(self):
@@ -539,14 +585,14 @@ class Tavern:
     #     for service in self.data_pack.get_services():
     #         remaining_requirements = set(service.get_prerequisites())
     #
-    #         # Remove any things provided by our upgrades
-    #         for upgrade_key in self.tavern_status.get_purchases():
-    #             upgrade = self.data_pack.get_upgrade(upgrade_key)
-    #             provided = upgrade.get_provided()
+    #         # Remove any things provided by our improvements
+    #         for improvement_key in self.business_status.get_purchases():
+    #             improvement = self.data_pack.get_improvement(improvement_key)
+    #             provided = improvement.get_provided()
     #             remaining_requirements = remaining_requirements.difference(provided)
     #
     #         # Remove any things provided by our staff:
-    #         for staff in self.tavern_status.get_staff():
+    #         for staff in self.business_status.get_staff():
     #             staff_archetype = self.data_pack.get_staff_archetype(staff)
     #             provided = staff_archetype.get_provided()
     #             remaining_requirements = remaining_requirements.difference(provided)
@@ -555,11 +601,11 @@ class Tavern:
     #         if len(remaining_requirements) == 0:
     #             max_modifier_tags = service.get_maximum_of_service_offered_tags()
     #
-    #             # Check our upgrade for inhibitions
+    #             # Check our improvement for inhibitions
     #             applicable_values = list()
-    #             for upgrade_key in self.tavern_status.get_purchases():
-    #                 upgrade = self.data_pack.get_upgrade(upgrade_key)
-    #                 applicable_values.extend(upgrade.get_provided_value(max_modifier_tags))
+    #             for improvement_key in self.business_status.get_purchases():
+    #                 improvement = self.data_pack.get_improvement(improvement_key)
+    #                 applicable_values.extend(improvement.get_provided_value(max_modifier_tags))
     #
     #             if len(applicable_values) == 0:
     #                 max_sales_of_service = 0
@@ -574,7 +620,7 @@ class Tavern:
     #
     # def simulate_attendance(self, tenday):
     #     # Simulate the number and type of patrons served
-    #     # For each patron type available get the status' for our current tavern status
+    #     # For each patron type available get the status' for our current business status
     #     for patron_type in self.get_visiting_patrons():
     #         """
     #         create a probability curve to represent patron attendance probability
@@ -589,14 +635,14 @@ class Tavern:
     #         avg_occupancy = list()
     #         max_occupancy_for_patron_type = list()
     #         max_occupancy_for_patron_type.append(self.get_maximum_occupancy())
-    #         current_upgrades = self.tavern_status.get_purchases()
-    #         for upgrade_key in current_upgrades:
-    #             upgrade = self.data_pack.get_upgrade(upgrade_key)
+    #         current_improvements = self.business_status.get_purchases()
+    #         for improvement_key in current_improvements:
+    #             improvement = self.data_pack.get_improvement(improvement_key)
     #
-    #             applicable_values = upgrade.get_provided_value(patron_type.get_mean_patron_occupancy_additive_tag())
+    #             applicable_values = improvement.get_provided_value(patron_type.get_mean_patron_occupancy_additive_tag())
     #             avg_occupancy.extend(applicable_values)
     #
-    #             applicable_values = upgrade.get_provided_value(patron_type.get_maximum_patron_occupancy_limit_tags())
+    #             applicable_values = improvement.get_provided_value(patron_type.get_maximum_patron_occupancy_limit_tags())
     #             max_occupancy_for_patron_type.extend(applicable_values)
     #
     #         # Determine simulation parameters
@@ -606,7 +652,7 @@ class Tavern:
     #
     #         # Staff can modify the popularity of the place
     #         # TODO: Should these instead affect the tenday popularity? It would certainly be less drastic
-    #         for staff, amount in self.tavern_status.get_staff().items():
+    #         for staff, amount in self.business_status.get_staff().items():
     #             for i in range(0, amount):
     #                 staff_archetype = self.data_pack.get_staff_archetype(staff)
     #                 modifiers = staff_archetype.get_provided_value(patron_type.get_mean_patron_occupancy_multiplier_tag())

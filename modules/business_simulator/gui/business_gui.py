@@ -1,13 +1,13 @@
 import asyncio
 import os
-from tkinter import Tk, Menu, filedialog, ttk, messagebox, Label, PanedWindow, Button, END, Frame
+from tkinter import Tk, Menu, filedialog, ttk, messagebox, Label, PanedWindow, Button, Frame
 from tkinter.scrolledtext import ScrolledText
 
-from modules.tavern_simulator.gui.gui_view_builder import build_status_view, build_data_pack_overview, build_data_pack_items_view
-from modules.tavern_simulator.gui.player_view_builder import build_status_view_players, build_purchaseable_view_players
-from modules.tavern_simulator.gui.widgets import ScrollFrame
-from modules.tavern_simulator.model.new_data_pack import DataPack
-from modules.tavern_simulator.tavern_controller import Tavern
+from modules.business_simulator.gui.gui_view_builder import build_status_view, build_data_pack_overview, build_data_pack_items_view, build_purchaseable_view
+from modules.business_simulator.business_command_view_builder import build_status_view_players, build_purchaseable_view_players
+from modules.business_simulator.gui.widgets import ScrollFrame
+from modules.business_simulator.model.data_pack import BusinessDataPack
+from modules.business_simulator.business_controller import BusinessController
 from utils import data
 
 """
@@ -62,7 +62,7 @@ class BusinessGUI(Tk):
 
         data_pack_name = os.path.basename(os.path.dirname(self.data_pack_path))
 
-        self.current_data_pack = DataPack(data_pack_name, self.data_pack_path, False, business_name=data_pack_name, description="")
+        self.current_data_pack = BusinessDataPack(data_pack_name, self.data_pack_path, False, business_name=data_pack_name, description="")
         self.data_pack_path = data_pack_path
         self.save_data_pack()
 
@@ -78,9 +78,9 @@ class BusinessGUI(Tk):
         services = data.load(os.path.join(self.data_pack_path, "services.json"))
         employees = data.load(os.path.join(self.data_pack_path, "employees.json"))
         customers = data.load(os.path.join(self.data_pack_path, "customers.json"))
-        upgrades = data.load(os.path.join(self.data_pack_path, "upgrades.json"))
+        improvements = data.load(os.path.join(self.data_pack_path, "improvements.json"))
         contracts = data.load(os.path.join(self.data_pack_path, "contracts.json"))
-        self.current_data_pack = DataPack(data_pack_name, self.data_pack_path, False, data_pack_data=data_pack_data, initial=initial, services=services, staff=employees, patrons=customers, upgrades=upgrades, contracts=contracts)
+        self.current_data_pack = BusinessDataPack(data_pack_name, self.data_pack_path, False, data_pack_data=data_pack_data, initial=initial, services=services, employees=employees, customers=customers, improvements=improvements, contracts=contracts)
 
         self.__refresh_data_pack()
 
@@ -102,9 +102,9 @@ class BusinessGUI(Tk):
         data.save(self.current_data_pack.data_pack_data, os.path.join(self.data_pack_path, "data_pack.json"))
         data.save(self.current_data_pack.initial, os.path.join(self.data_pack_path, "initial.json"))
         data.save(self.current_data_pack.services, os.path.join(self.data_pack_path, "services.json"))
-        data.save(self.current_data_pack.employee, os.path.join(self.data_pack_path, "employees.json"))
-        data.save(self.current_data_pack.patrons, os.path.join(self.data_pack_path, "customers.json"))
-        data.save(self.current_data_pack.upgrades, os.path.join(self.data_pack_path, "upgrades.json"))
+        data.save(self.current_data_pack.employees, os.path.join(self.data_pack_path, "employees.json"))
+        data.save(self.current_data_pack.customers, os.path.join(self.data_pack_path, "customers.json"))
+        data.save(self.current_data_pack.improvements, os.path.join(self.data_pack_path, "improvements.json"))
         data.save(self.current_data_pack.contracts, os.path.join(self.data_pack_path, "contracts.json"))
 
         self.__refresh_data_pack()
@@ -130,10 +130,10 @@ class BusinessGUI(Tk):
 
         self.simulation_name = simulation_name
         self.simulation_path = simulation_path
-        self.simulation = Tavern()
+        self.simulation = BusinessController("gui")
         self.loop.run_until_complete(self.simulation.set_data_pack(self.current_data_pack))
 
-        data.save(self.simulation.get_tavern_status(), full_path)
+        data.save(self.simulation.get_business_status(), full_path)
         self.__refresh_simulation()
 
     def load_simulation(self):
@@ -143,13 +143,13 @@ class BusinessGUI(Tk):
 
         self.simulation_path = os.path.dirname(answer)
         self.simulation_name = os.path.basename(answer)
-        tavern_status = data.load(answer)
-        self.simulation = Tavern(tavern_status=tavern_status)
+        business_status = data.load(answer)
+        self.simulation = BusinessController(business_status=business_status)
         self.loop.run_until_complete(self.simulation.set_data_pack(self.current_data_pack))
         self.__refresh_simulation()
 
     def save_simulation(self):
-        data.save(self.simulation.get_tavern_status(), os.path.join(self.simulation_path, self.simulation_name))
+        data.save(self.simulation.get_business_status(), os.path.join(self.simulation_path, self.simulation_name))
         self.__refresh_simulation()
 
     def save_simulation_as(self):
@@ -159,7 +159,7 @@ class BusinessGUI(Tk):
 
         self.simulation_path = os.path.dirname(answer)
         self.simulation_name = os.path.basename(answer)
-        data.save(self.simulation.get_tavern_status(), os.path.join(self.simulation_path, self.simulation_name))
+        data.save(self.simulation.get_business_status(), os.path.join(self.simulation_path, self.simulation_name))
         self.__refresh_simulation()
 
     def clear_simulation(self):
@@ -172,19 +172,17 @@ class BusinessGUI(Tk):
         self.discord_view = not self.discord_view
         self.__refresh_simulation()
 
-    def purchase_upgrade(self):
-        available_upgrades = self.simulation.get_upgradeable()
-        display_values = list()
-        for item in available_upgrades:
-            display_values.append(item.get_key())
+    def purchase_improvement(self, item):
+        self.loop.run_until_complete(self.simulation.apply_improvement(item, item.cost, 0))
+        self.__refresh_simulation()
 
-        pass
+    def purchase_contract(self, item):
+        self.loop.run_until_complete(self.simulation.apply_contract(item, item.cost, 0))
+        self.__refresh_simulation()
 
-    def purchase_contract(self):
-        pass
-
-    def purchase_staff(self):
-        pass
+    def purchase_employee(self, item):
+        self.loop.run_until_complete(self.simulation.hire_employee(item, "BOB", 0))
+        self.__refresh_simulation()
 
     def __setup_menus(self):
         self.menu = Menu(self)
@@ -229,9 +227,9 @@ class BusinessGUI(Tk):
         self.data_pack_tabs.add(self.data_pack_customers, text="Customers")
         self.data_pack_customers_content = None
 
-        self.data_pack_upgrades = Frame(self.data_pack_tabs)
-        self.data_pack_tabs.add(self.data_pack_upgrades, text="Upgrades")
-        self.data_pack_upgrades_content = None
+        self.data_pack_improvements = Frame(self.data_pack_tabs)
+        self.data_pack_tabs.add(self.data_pack_improvements, text="Improvements")
+        self.data_pack_improvements_content = None
 
         self.data_pack_contracts = Frame(self.data_pack_tabs)
         self.data_pack_tabs.add(self.data_pack_contracts, text="Contracts")
@@ -253,10 +251,9 @@ class BusinessGUI(Tk):
         self.window.add(self.data_pack_frame)
 
     def __refresh_data_pack(self):
+        self.__delete_data_pack_display()
         if self.current_data_pack is not None:
             self.__fill_data_pack()
-        else:
-            self.__delete_data_pack_display()
 
     def __fill_data_pack(self):
         self.__delete_data_pack_display()
@@ -287,10 +284,10 @@ class BusinessGUI(Tk):
             build_data_pack_items_view(self.data_pack_customers_content.view_port, self.current_data_pack.get_customers())
             self.data_pack_customers_content.pack(expand=1, fill="both")
 
-            # Add the upgrades
-            self.data_pack_upgrades_content = ScrollFrame(self.data_pack_upgrades)
-            build_data_pack_items_view(self.data_pack_upgrades_content.view_port, self.current_data_pack.get_upgrades())
-            self.data_pack_upgrades_content.pack(expand=1, fill="both")
+            # Add the improvements
+            self.data_pack_improvements_content = ScrollFrame(self.data_pack_improvements)
+            build_data_pack_items_view(self.data_pack_improvements_content.view_port, self.current_data_pack.get_improvements())
+            self.data_pack_improvements_content.pack(expand=1, fill="both")
 
             # Add the contracts
             self.data_pack_contracts_content = ScrollFrame(self.data_pack_contracts)
@@ -319,9 +316,9 @@ class BusinessGUI(Tk):
             self.data_pack_customers_content.pack_forget()
             self.data_pack_customers_content.destroy()
 
-        if self.data_pack_upgrades_content is not None:
-            self.data_pack_upgrades_content.pack_forget()
-            self.data_pack_upgrades_content.destroy()
+        if self.data_pack_improvements_content is not None:
+            self.data_pack_improvements_content.pack_forget()
+            self.data_pack_improvements_content.destroy()
 
         if self.data_pack_contracts_content is not None:
             self.data_pack_contracts_content.pack_forget()
@@ -337,17 +334,21 @@ class BusinessGUI(Tk):
         # View frame
         self.simulation_tabs = ttk.Notebook(self.simulation_frame)
 
+        # Tabs
+        """            
+        Potential Sales & Customers
+        Unavailable Purchases
+        Removed Purchases
+        Inactive Purchases
+        """
+
+        # TODO: Purchase button
+
         self.simulation_overview = Frame(self.simulation_tabs)
         self.simulation_tabs.add(self.simulation_overview, text="Overview")
 
         self.simulation_available = Frame(self.simulation_tabs)
         self.simulation_tabs.add(self.simulation_available, text="Available")
-
-        # TODO: Resizeable split here
-        # TODO: Tabs with purchase type
-        # TODO: Purchase button
-        # TODO: This should depend on the view
-        # TODO: Removed / Not working / Not available
 
         # Controls frame
         self.simulation_controls = Frame(self.simulation_frame)
@@ -369,23 +370,11 @@ class BusinessGUI(Tk):
         self.window.add(self.simulation_frame)
 
     def __refresh_simulation(self):
+        self.__delete_simulation()
         if self.simulation is not None:
             self.__fill_simulation()
-        else:
-            self.__forget_simulation()
 
     def __fill_simulation(self):
-        self.__fill_overview()
-        self.__fill_purchaseable()
-
-        # TODO: This should depend on the view
-        # TODO: Current / Potential / Removed / Not working / Not available
-
-    def __fill_overview(self):
-        # Clean up
-        if self.simulation_summary is not None:
-            self.simulation_summary.pack_forget()
-            self.simulation_summary.destroy()
 
         # Are we attempting to represent what the players would see?
         if self.discord_view:
@@ -405,6 +394,22 @@ class BusinessGUI(Tk):
             self.simulation_summary.insert(1.0, string_form)
             self.simulation_summary.pack(expand=1, fill="both")
 
+            # Create our status representation in long message form
+            long_message = self.loop.run_until_complete(build_purchaseable_view_players(self.simulation, None, None))
+
+            # Just convert this to a string for our display
+            string_form = ""
+            for message in long_message:
+                string_form += message + "\n"
+
+            # Strip out the formatting marks
+            string_form = string_form.replace("`", "")
+
+            # Add this to our view
+            self.simulation_purchaseable = ScrolledText(self.simulation_available)
+            self.simulation_purchaseable.insert(1.0, string_form)
+            self.simulation_purchaseable.pack(expand=1, fill="both")
+
         # We should just build it in gui form
         else:
             # Add the actual display items
@@ -412,27 +417,21 @@ class BusinessGUI(Tk):
             build_status_view(self.simulation_summary.view_port, self.simulation)
             self.simulation_summary.pack(expand=1, fill="both")
 
-    def __fill_purchaseable(self):
-        # Create our status representation in long message form
-        long_message = self.loop.run_until_complete(build_purchaseable_view_players(self.simulation, None, None))
+            # Available purchase
+            self.simulation_purchaseable = ScrollFrame(self.simulation_available)
+            build_purchaseable_view(self, self.simulation_purchaseable.view_port, self.simulation)
+            self.simulation_purchaseable.pack(expand=1, fill="both")
 
-        # Just convert this to a string for our display
-        string_form = ""
-        for message in long_message:
-            string_form += message + "\n"
+    def __delete_simulation(self):
+        # Clean up
+        if hasattr(self, "simulation_summary") and self.simulation_summary is not None:
+            self.simulation_summary.pack_forget()
+            self.simulation_summary.destroy()
 
-        # Strip out the formatting marks
-        string_form = string_form.replace("`", "")
+        if hasattr(self, "simulation_purchaseable") and self.simulation_purchaseable is not None:
+            self.simulation_purchaseable.pack_forget()
+            self.simulation_purchaseable.destroy()
 
-        # Add this to our view
-        self.simulation_purchaseable = ScrolledText(self.simulation_available)
-        self.simulation_purchaseable.insert(1.0, string_form)
-        self.simulation_purchaseable.pack(expand=1, fill="both")
-
-    def __forget_simulation(self):
-        self.simulation_summary.delete(1.0, END)
-        self.simulation_purchaseable.delete(1.0, END)
-
-
-gui = BusinessGUI()
-gui.mainloop()
+if __name__ == "__main__":
+    gui = BusinessGUI()
+    gui.mainloop()
