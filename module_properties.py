@@ -4,10 +4,10 @@ from utils import constants
 
 
 class Module(commands.Cog):
-    def __init__(self, name, manager):
+    def __init__(self, name, engine):
         self.name = name
-        self.manager = manager
-        self.bot = self.manager.get_bot()
+        self.engine = engine
+        self.bot = self.engine.get_bot()
 
     def get_name(self):
         return self.name

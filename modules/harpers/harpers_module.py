@@ -26,11 +26,11 @@ TODO: Configurable DJ roles
 
 
 class Harpers(Module):
-    def __init__(self, manager):
-        super().__init__("harpers", manager)
+    def __init__(self, engine):
+        super().__init__("harpers", engine)
 
         self.bards = dict()
-        self.game_master = self.manager.get_module("game_master")
+        self.game_master = self.engine.get_module("game_master")
         if not self.game_master:
             raise RuntimeError("Cannot use the tavern simulator without the Game Master module.")
 
@@ -42,9 +42,6 @@ class Harpers(Module):
             raise commands.NoPrivateMessage('`This command can\'t be used in DM channels.`')
 
         return True
-
-    async def cog_before_invoke(self, ctx: commands.Context):
-        ctx.bard = self.get_bard_for_context(ctx)
 
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, CommandRunError):
@@ -83,14 +80,40 @@ class Harpers(Module):
             raise BardError('`You must be in a room for me to play!`')
 
         # Move the bard into the room if it is already playing
-        if ctx.bard.voice:
-            await ctx.bard.voice.move_to(ctx.author.voice.channel)
+        bard = self.get_bard_for_context(ctx)
+        if bard.voice:
+            await bard.voice.move_to(ctx.author.voice.channel)
 
         # Otherwise the bard can begin his performance
         else:
-            ctx.bard.voice = await ctx.author.voice.channel.connect()
+            bard.voice = await ctx.author.voice.channel.connect()
+
+        # Info channel
+        bard.info = ctx.channel
 
         return await ctx.send("`I am now playing in: " + ctx.author.voice.channel.name + "`")
+
+    @commands.command(name="harpers:notifications")
+    async def _notifications(self, ctx:commands.Context):
+        # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
+        if self.game_master.is_game_running_for_context(ctx):
+            permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:notifications", permissions_level=constants.gm)
+            if not permissions_check:
+                return await ctx.send("`" + reason + "`")
+
+        else:
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:notifications", elevated_roles=[self.bard_roles])
+            if not permissions_check:
+                return await ctx.send("`" + reason + "`")
+
+        # Check if the bard exists
+        bard = self.get_bard_for_context(ctx)
+        if not bard.voice:
+            return await ctx.send("`Cannot assign notifications without having a harper active.`")
+
+        bard.info = ctx.channel
+        return await ctx.send("`The harper will notify: " + str(ctx.channel) + " of any updates.`")
+
 
     @commands.command(name="harpers:close")
     async def _close(self, ctx: commands.Context):
@@ -105,12 +128,13 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        await ctx.bard.stop()
+        bard = self.get_bard_for_context(ctx)
+        await bard.stop()
         del self.bards[ctx.guild.id]
         return await ctx.send("`I have finished performing.`")
 
     @commands.command(name='harpers:volume')
-    async def _volume(self, ctx: commands.Context, *, volume: int):
+    async def _volume(self, ctx: commands.Context, info: str = ""):
         # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
         if self.game_master.is_game_running_for_context(ctx):
             permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:volume", permissions_level=constants.gm)
@@ -122,14 +146,61 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if not ctx.bard.is_playing:
-            return await ctx.send('`I am not playing anything at the moment.`')
+        bard = self.get_bard_for_context(ctx)
+
+        # Extract a volume
+        if info == "":
+            return await ctx.send("`I am currently playing with " + str(bard.volume * 100) + "% of my ability`")
+        else:
+            try:
+                volume = int(info)
+            except:
+                return await ctx.send("`I do not understand your request.`")
 
         if 0 > volume > 100:
             return await ctx.send("`Your request for me to adjust the loudness of my performance must lie between 0 and 100 percent`")
 
-        ctx.bard.volume = volume / 100
-        return await ctx.send("`I am now playing with {}% of my effort`".format(volume))
+        bard.volume = volume / 100
+        return await ctx.send("`I am now playing with {}% of my ability`".format(volume))
+
+    @commands.command(name="harpers:play_now")
+    async def _play_now(self, ctx: commands.Context, *, info: str):
+        # Do we have permission to run this command. If a game is running we should enforce only the GM (unless there are permission overwrites going on)
+        if self.game_master.is_game_running_for_context(ctx):
+            permissions_check, reason = await self.game_master.check_active_game_permissions_for_user(ctx, "harpers:play", permissions_level=constants.gm)
+            if not permissions_check:
+                return await ctx.send("`" + reason + "`")
+
+        else:
+            permissions_check, reason = await self.game_master.check_guild_permissions_for_user(ctx, "harpers:play", elevated_roles=[self.bard_roles])
+            if not permissions_check:
+                return await ctx.send("`" + reason + "`")
+
+        bard = self.get_bard_for_context(ctx)
+        if not bard.voice:
+            await ctx.send("`There is no bard - please summon one first!`")
+
+        async with ctx.typing():
+            try:
+                # Create a ytdl source, later this may have more functionality
+                source = await YTDLSource.create_source(ctx, info, loop=self.bot.loop)
+
+            except SourceError as e:
+                await ctx.send('`I encountered the following issue : {} when trying to play your request`'.format(str(e)))
+
+            else:
+                song = Song(source, info)
+                current_song = bard.current
+
+                # Re-add our current to the queue
+                if current_song:
+                    new_current_song_source = await YTDLSource.create_source(ctx, current_song.creation_info, loop=self.bot.loop)
+                    new_current_song = Song(new_current_song_source, current_song.creation_info)
+                    await bard.set_list.play_now(new_current_song)
+
+                await bard.set_list.play_now(song)
+                bard.skip()
+                return await ctx.send("`Okay, I will play that song NOW.`")
 
     @commands.command(name="harpers:play")
     async def _play(self, ctx: commands.Context, *, info: str):
@@ -144,8 +215,9 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if not ctx.bard.voice:
-            await ctx.send("`There is no bard - please summon one first!`")
+        bard = self.get_bard_for_context(ctx)
+        if not bard.voice:
+            return await ctx.send("`There is no bard - please summon one first!`")
 
         async with ctx.typing():
             try:
@@ -156,9 +228,9 @@ class Harpers(Module):
                 await ctx.send('`I encountered the following issue : {} when trying to play your request`'.format(str(e)))
 
             else:
-                song = Song(source)
+                song = Song(source, info)
 
-                await ctx.bard.set_list.put(song)
+                await bard.set_list.put(song)
                 return await ctx.send("`Okay, I will play that song in a bit.`")
 
     @commands.command(name='pause')
@@ -174,8 +246,9 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if ctx.bard.is_playing and ctx.bard.voice.is_playing():
-            ctx.bard.voice.pause()
+        bard = self.get_bard_for_context(ctx)
+        if bard.is_playing and bard.voice.is_playing():
+            bard.voice.pause()
             return await ctx.message.add_reaction('⏯')
 
     @commands.command(name='harpers:resume')
@@ -192,8 +265,9 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         # If the bard is on break, let him resume
-        if ctx.bard.is_playing and ctx.bard.voice.is_paused():
-            ctx.bard.voice.resume()
+        bard = self.get_bard_for_context(ctx)
+        if bard.is_playing and bard.voice.is_paused():
+            bard.voice.resume()
             return await ctx.message.add_reaction('⏯')
 
     @commands.command(name='harpers:stop_and_clear')
@@ -209,9 +283,10 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        ctx.bard.set_list.clear()
-        if not ctx.bard.is_playing():
-            ctx.bard.voice.stop()
+        bard = self.get_bard_for_context(ctx)
+        bard.set_list.clear()
+        if not bard.is_playing():
+            bard.voice.stop()
             return await ctx.message.add_reaction('⏹')
 
     @commands.command(name='harpers:next')
@@ -228,12 +303,13 @@ class Harpers(Module):
                 return await ctx.send("`" + reason + "`")
 
         # If the bard is playing we cannot move to the next song
-        if not ctx.bard.is_playing:
-            return await ctx.send('`I am not playing any harpers right now.`')
+        bard = self.get_bard_for_context(ctx)
+        if not bard.is_playing:
+            return await ctx.send('`I am not playing right now.`')
 
         # Skip the song
         await ctx.message.add_reaction('⏭')
-        ctx.bard.skip()
+        bard.skip()
         return await ctx.send("`Fine, I will skip that song. Heathen!`")
 
     @commands.command(name='harpers:loop')
@@ -249,11 +325,12 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if not ctx.bard.is_playing:
+        bard = self.get_bard_for_context(ctx)
+        if not bard.is_playing:
             return await ctx.send('`I am not playing any harpers right now.`')
 
         # Inverse boolean value to loop and unloop.
-        ctx.bard.loop = not ctx.bard.loop
+        bard.loop = not bard.loop
         await ctx.message.add_reaction('✅')
 
     @commands.command(name='harpers:shuffle_setlist')
@@ -269,10 +346,11 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if len(ctx.bard.set_list) == 0:
+        bard = self.get_bard_for_context(ctx)
+        if len(bard.set_list) == 0:
             return await ctx.send('Empty queue.')
 
-        ctx.bard.set_list.shuffle()
+        bard.set_list.shuffle()
         return await ctx.message.add_reaction('✅')
 
     @commands.command(name='harpers:remove_song_from_setlist')
@@ -288,10 +366,11 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if len(ctx.voice_state.songs) == 0:
+        bard = self.get_bard_for_context(ctx)
+        if len(bard.set_list) == 0:
             return await ctx.send('Empty queue.')
 
-        ctx.voice_state.songs.remove(index - 1)
+        bard.set_list.remove(index - 1)
         await ctx.message.add_reaction('✅')
 
     @commands.command(name='harpers:set_list')
@@ -307,20 +386,21 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if len(ctx.bard.set_list) == 0:
+        bard = self.get_bard_for_context(ctx)
+        if len(bard.set_list) == 0:
             return await ctx.send('`Empty queue.`')
 
         items_per_page = 10
-        pages = math.ceil(len(ctx.bard.set_list) / items_per_page)
+        pages = math.ceil(len(bard.set_list) / items_per_page)
 
         start = (page - 1) * items_per_page
         end = start + items_per_page
 
         queue = ''
-        for i, song in enumerate(ctx.bard.set_list[start:end], start=start):
+        for i, song in enumerate(bard.set_list[start:end], start=start):
             queue += '`{0}.` [**{1.source.title}**]({1.source.url})\n'.format(i + 1, song)
 
-        embed = (discord.Embed(description='`**{} tracks:**\n\n{}`'.format(len(ctx.bard.set_list), queue)).set_footer(text='`Viewing page {}/{}`'.format(page, pages)))
+        embed = (discord.Embed(description='`**{} tracks:**\n\n{}`'.format(len(bard.set_list), queue)).set_footer(text='`Viewing page {}/{}`'.format(page, pages)))
         return await ctx.send(embed=embed)
 
     @commands.command(name='harpers:now')
@@ -336,10 +416,11 @@ class Harpers(Module):
             if not permissions_check:
                 return await ctx.send("`" + reason + "`")
 
-        if ctx.bard or ctx.bard.current:
+        bard = self.get_bard_for_context(ctx)
+        if not bard or not bard.current:
             return await ctx.send("`No harpers playing!`")
 
-        return await ctx.send(embed=ctx.bard.current.create_embed())
+        return await ctx.send(embed=bard.current.create_embed())
 
     @commands.command(name="harpers:play:favourite")
     async def _play_favourite(self, ctx: commands.Context, *, terms: str):
@@ -357,7 +438,7 @@ class Harpers(Module):
         tags = terms.split()
 
         # Load existing
-        user_songs = await self.manager.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
+        user_songs = await self.engine.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
         if user_songs is None or len(user_songs.music) == 0:
             return await ctx.send("`You have not tagged any songs yet!`")
 
@@ -396,10 +477,11 @@ class Harpers(Module):
             return ctx.send("`You have listed too many songs there for me to work though. Please do it one at a time.`")
 
         # If there are no urls provided then we need to be playing something
-        if len(urls) == 0 and not ctx.bard.current:
+        bard = self.get_bard_for_context(ctx)
+        if len(urls) == 0 and not bard.current:
             return await ctx.send("`I am not playing anything right now!`")
         elif len(urls) == 0:
-            url = ctx.bard.current.source.url
+            url = bard.current.source.url
         else:
             url = urls[0]
 
@@ -407,7 +489,7 @@ class Harpers(Module):
         tags = terms.replace(url, "").split()
 
         # Load existing
-        user_songs = await self.manager.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
+        user_songs = await self.engine.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
         if user_songs is None:
             user_songs = Favourites()
 
@@ -427,7 +509,7 @@ class Harpers(Module):
             user_songs.add_music(entry)
             await ctx.send("`Added: " + url + " to your favourites with the following refernce notes: " + str(tags) + "`")
 
-        return await self.manager.save_data_in_data_path_for_user(ctx, "harpers", "favourites.json", user_songs)
+        return await self.engine.save_data_in_data_path_for_user(ctx, "harpers", "favourites.json", user_songs)
 
     @commands.command(name="harpers:forget:favourite")
     async def _forget_favourites(self, ctx: commands.Context, *, terms: str):
@@ -440,7 +522,7 @@ class Harpers(Module):
             return await ctx.send("`You did not provide me with the song that you wish me to forget your preferences for!`")
 
         # Load existing
-        user_songs = await self.manager.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
+        user_songs = await self.engine.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
         if user_songs is None or len(user_songs.music) == 0:
             return await ctx.send("`I have no recorded preferences for any songs for you...`")
 
@@ -470,7 +552,7 @@ class Harpers(Module):
         else:
             await ctx.send("`Amended the your preferences for the song: " + str(entry) + " to: " + entry.get_tags() + "`")
 
-        return await self.manager.save_data_in_data_path_for_user(ctx, "harpers", "favourites.json", user_songs)
+        return await self.engine.save_data_in_data_path_for_user(ctx, "harpers", "favourites.json", user_songs)
 
     @commands.command(name="harpers:favourites")
     async def _list_favourites(self, ctx: commands.Context):
@@ -479,7 +561,7 @@ class Harpers(Module):
             return await ctx.send("`" + reason + "`")
 
         # Load existing
-        user_songs = await self.manager.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
+        user_songs = await self.engine.load_data_from_data_path_for_user(ctx, "harpers", "favourites.json")
         if user_songs is None or len(user_songs.music) == 0:
             return await ctx.send("`I do not have any song preferences recorded for you.`")
 

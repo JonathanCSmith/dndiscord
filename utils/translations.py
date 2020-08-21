@@ -1,3 +1,8 @@
+import os
+
+from utils import data
+
+
 class LanguagePack:
     def __init__(self, language):
         self.language = language
@@ -36,29 +41,13 @@ class TranslationManager:
 
     async def reload_translations(self, bot, ctx):
         for translation_source in self.translation_sources:
-            # Generate a unique prefix
-            if translation_source.is_guild_data:
-                unique_prefix = str(ctx.guild.id) + "." + translation_source.key
-            else:
-                unique_prefix = translation_source.key
-
-            # For each of our provided language packs
-            for type, file in translation_source.translations.items():
-                if type not in self.languages:
-                    language = LanguagePack(type)
-                    self.languages[type] = language
-                else:
-                    language = self.languages[type]
-
-                if translation_source.is_guild_data:
-                    data = await bot.load_data_from_data_path_for_guild(ctx, translation_source.relative_path, file)
-                else:
-                    data = await bot.load_data_from_data_path(translation_source.relative_path, file)
-
-                if data:
-                    language.add_data(unique_prefix, data)
+            await self._load_translation_from_file(bot, ctx, translation_source)
 
     async def load_translations(self, bot, ctx, translation_source: TranslationSource):
+        await self._load_translation_from_file(bot, ctx, translation_source)
+        self.translation_sources.append(translation_source)
+
+    async def _load_translation_from_file(self, bot, ctx, translation_source: TranslationSource):
         # Generate a unique prefix
         if translation_source.is_guild_data:
             unique_prefix = str(ctx.guild.id) + "." + translation_source.key

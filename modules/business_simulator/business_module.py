@@ -4,7 +4,7 @@ import names
 from discord.ext import commands
 
 from module_properties import Module
-from modules.business_simulator.data_packs_generators import default_data_pack
+from modules.business_simulator.data.data_packs_generators import default_data_pack
 from modules.business_simulator.model.data_pack import BusinessDataPack
 from modules.business_simulator.business_controller import BusinessController
 from modules.business_simulator.business_command_view_builder import build_status_view_players, build_purchaseable_view_players
@@ -38,11 +38,11 @@ TODO: Employee, Contract, Customer_History, Sales_History need custom data
 
 
 class BusinessSimulator(Module):
-    def __init__(self, manager):
-        super().__init__("business_simulator", manager)
+    def __init__(self, engine):
+        super().__init__("business_simulator", engine)
 
         self.active_businesses = dict()
-        self.game_master = self.manager.get_module("game_master")
+        self.game_master = self.engine.get_module("game_master")
         if self.game_master:
             self.game_master.register_game_state_listener(self)
         else:
@@ -63,68 +63,65 @@ class BusinessSimulator(Module):
         
     def get_businesses_for_context(self, ctx):
         game = self.game_master.get_active_game_for_context(ctx)
-        unique_id = str(ctx.guild.id) + game.get_name()
-        if unique_id in self.active_businesses:
-            return self.active_businesses[unique_id]
+        if game.get_name() in self.active_businesses:
+            return self.active_businesses[game.get_name()]
 
         return None
 
     def get_business_for_context(self, ctx, name):
         game = self.game_master.get_active_game_for_context(ctx)
-        unique_id = str(ctx.guild.id) + game.get_name()
-        if unique_id in self.active_businesses and name in self.active_businesses[unique_id]:
-            return self.active_businesses[unique_id][name]
+        if game.get_name() in self.active_businesses and name in self.active_businesses[game.get_name()]:
+            return self.active_businesses[game.get_name()][name]
 
         return None
 
     async def set_business_for_context(self, ctx, business):
         game = self.game_master.get_active_game_for_context(ctx)
-        unique_id = str(ctx.guild.id) + game.get_name()
 
         should_save = False
-        if business.get_name() not in self.active_businesses[unique_id]:
+        if business.get_name() not in self.active_businesses[game.get_name()]:
             should_save = True
 
         # Save the business specific data
         await business.save(self.game_master, ctx)
-        self.active_businesses[unique_id][business.get_name()] = business
+        self.active_businesses[game.get_name()][business.get_name()] = business
 
         # Save our core info too
         if should_save:
-            await self.game_master.save_game_data(ctx, "businesses", unique_id + "_businesses.json", self.active_businesses.keys())
+            await self.game_master.save_game_data(ctx, "businesses", "businesses.json", [*self.active_businesses[game.get_name()].keys()])
 
     async def unload_business_for_context(self, ctx):
         game = self.game_master.get_active_game_for_context(ctx)
-        unique_id = str(ctx.guild.id) + game.get_name()
 
-        if unique_id in self.active_businesses:
-            await self.game_master.save_game_data(ctx, "businesses", unique_id + "_businesses.json", self.active_businesses.keys())
-            for val in self.active_businesses.values():
+        if game.get_name() in self.active_businesses:
+            await self.game_master.save_game_data(ctx, "businesses", "businesses.json", [*self.active_businesses[game.get_name()].keys()])
+            for val in self.active_businesses[game.get_name()].values():
                 val.save(self.game_master, ctx)
 
-            del self.active_businesses[unique_id]
+            del self.active_businesses[game.get_name()]
 
     async def game_created(self, ctx, game):
         pass
 
     async def game_started(self, ctx, game):
-        unique_id = str(ctx.guild.id) + game.get_name()
-        businesses = self.game_master.load_game_data(ctx, "businesses", unique_id + "_businesses.json")
+        businesses = await self.game_master.load_game_data(ctx, "businesses", "businesses.json")
         if businesses is not None:
             real_businesses = dict()
             for business_name in businesses:
-                business = BusinessController.load_business(self.manager, self.game_master, ctx, business_name)
+                #business = await BusinessController.load_business(self.engine, self.game_master, ctx, business_name)
+                business = await BusinessController.load_business(self.engine, self.game_master, ctx, business_name)
                 if isinstance(business, str):
                     return await ctx.send(business)
 
                 else:
-                    await ctx.send("`Loaded business: " + business_name + "`")
+                    display_name = business.get_name() if business.get_name() != "" else business_name
+                    await ctx.send("`Loaded business: " + display_name + "`")
 
                 real_businesses[business_name] = business
-            self.active_businesses[unique_id] = real_businesses
+            self.active_businesses[game.get_name()] = real_businesses
         else:
-            self.active_businesses[unique_id] = dict()
-            await self.game_master.save_game_data(ctx, "businesses", unique_id + "_businesses.json", self.active_businesses.keys())
+            self.active_businesses[game.get_name()] = dict()
+            await self.game_master.save_game_data(ctx, "businesses", "businesses.json", [*self.active_businesses[game.get_name()].keys()])
 
     async def game_about_to_end(self, ctx, game):
         await self.unload_business_for_context(ctx)
@@ -133,7 +130,10 @@ class BusinessSimulator(Module):
         await self.unload_business_for_context(ctx)
 
     async def day_passed(self, ctx, game):
-        pass
+        businesses = self.active_businesses[game.get_name()]
+        for business in businesses:
+            business.pass_day(ctx, game)
+            # TODO: Some kind of output here
 
     async def _get_data_pack(self, ctx, pack_name):
         data_pack = None
@@ -142,18 +142,18 @@ class BusinessSimulator(Module):
         # First check our guild specific dir and our local bot directory
         if pack_name != "" and pack_name != "FORCE":
             await ctx.send("`Attempting to load data pack: " + pack_name + "`")
-            data_pack = await BusinessDataPack.load(self.manager, ctx, data_packs_path, data_pack_name=pack_name)
+            data_pack = await BusinessDataPack.load(self.engine, ctx, data_packs_path, data_pack_name=pack_name)
 
         # Fallback to default_data pack
         if not data_pack and pack_name != "FORCE":
             await ctx.send("`Could not find a data pack named: " + pack_name + " using default instead.`")
-            data_pack = await BusinessDataPack.load(self.manager, ctx, data_packs_path, data_pack_name="default_data_pack")
+            data_pack = await BusinessDataPack.load(self.engine, ctx, data_packs_path, data_pack_name="default_data_pack")
 
         # If its still not full we can dump our code based one to file and use that
         if data_pack is None or pack_name == "FORCE":
             await ctx.send("`Using the in code data pack.`")
             data_pack = default_data_pack.create_default_data_pack(data_packs_path)
-            await data_pack.save(self.manager, ctx)
+            await data_pack.save(self.engine, ctx)
 
         return data_pack
 
@@ -219,7 +219,8 @@ class BusinessSimulator(Module):
         if not business:
             return await ctx.send("`No business with the name: " + name + "`")
 
-        business = await BusinessController.load_business(self.manager, self.game_master, ctx, name)
+        #business = await BusinessController.load_business(self.manager, self.game_master, ctx, name)
+        business = await BusinessController.load_business(self.engine, self.game_master, ctx, name)
         if isinstance(business, str):
             return await ctx.send(business)
 
@@ -235,23 +236,24 @@ class BusinessSimulator(Module):
             return await ctx.send("`" + reason + "`")
 
         # Split
-        parts = pack.split("")
+        parts = pack.split(" ")
         if len(parts) != 2:
-            return ctx.send("`You need to pass the data pack and the business name into this function. Also the data pack and the business nickname must be one word!`")
+            return await ctx.send("`You need to pass the data pack and the business name into this function. Also the data pack and the business nickname must be one word!`")
 
         # Check if we already have a business here!
         business = self.get_business_for_context(ctx, parts[1])
         if business is not None:
-            return ctx.send("`There is already a business initialized with: " + pack + "`")
+            return await ctx.send("`There is already a business initialized with: " + pack + "`")
 
         # Try and load the business to make sure that it doesnt exist as a file
-        business = await BusinessController.load_business(self.manager, self.game_master, ctx, parts[1])
+        #business = await BusinessController.load_business(self.engine, self.game_master, ctx, parts[1])
+        business = await BusinessController.load_business(self.engine, ctx, self.game_master, parts[1])
         if isinstance(business, str):
-            return ctx.send(business)
+            return await ctx.send(business)
 
         elif business:
             await self.set_business_for_context(ctx, business)
-            return ctx.send("`There is already business data present in this game. Loading it instead.`")
+            return await ctx.send("`There is already business data present in this game. Loading it instead.`")
 
         # Look for a data pack base on our input.
         data_pack = await self._get_data_pack(ctx, parts[0])
@@ -276,7 +278,7 @@ class BusinessSimulator(Module):
             return ctx.send("You must provide the nickname of the business that you would like to rename!")
 
         # Get the business and exit if there is none
-        business = await self.get_business_for_context(ctx, parts[0])
+        business = self.get_business_for_context(ctx, parts[0])
         if not business:
             return await ctx.send("`There is no business being operated in your game with the name: " + parts[0] + "!`")
 
@@ -292,17 +294,16 @@ class BusinessSimulator(Module):
         if not permissions_check:
             return await ctx.send("`" + reason + "`")
 
-        # Split for nickname
-        parts = name.split(" ", 1)
-        if len(parts) != 2:
-            return ctx.send("You must provide the nickname of the business that you would like to rename!")
+        # If name is empty
+        if name == "":
+            return await ctx.send("`No name was provided.`")
 
         # Get the business and exit if there is none
-        business = self.get_business_for_context(ctx, parts[0])
+        business = self.get_business_for_context(ctx, name)
         if not business:
-            return await ctx.send("`There is no business being operated in your game!`")
+            return await ctx.send("`There is no business being operated in your game with the nickname: " + name + "!`")
 
-        long_message = await build_status_view_players(business, self.manager, ctx)
+        long_message = await build_status_view_players(business, self.engine, ctx)
 
         # Output
         async with ctx.typing():
@@ -319,14 +320,14 @@ class BusinessSimulator(Module):
         # Split for nickname
         parts = name.split(" ", 1)
         if len(parts) != 2:
-            return ctx.send("You must provide the nickname of the business that you would like to rename!")
+            return await ctx.send("You must provide the nickname of the business that you would like to rename!")
 
         # Get the business and exit if there is none
         business = self.get_business_for_context(ctx, parts[0])
         if not business:
             return await ctx.send("`There is no business being operated in your game!`")
 
-        long_message = await build_purchaseable_view_players(business, self.manager, ctx)
+        long_message = await build_purchaseable_view_players(business, self.engine, ctx)
 
         # Output
         async with ctx.typing():
@@ -343,7 +344,7 @@ class BusinessSimulator(Module):
         # Split for nickname
         parts = name.split(" ", 1)
         if len(parts) != 2:
-            return ctx.send("You must provide the nickname of the business that you would like to rename!")
+            return await ctx.send("You must provide the nickname of the business that you would like to rename!")
 
         # Get the amount
         amount = get_trailing_number(parts[1])
@@ -375,7 +376,7 @@ class BusinessSimulator(Module):
         # Split for nickname
         parts = name.split(" ", 1)
         if len(parts) != 2:
-            return ctx.send("You must provide the nickname of the business that you would like to rename!")
+            return await ctx.send("You must provide the nickname of the business that you would like to rename!")
 
         # Get the amount
         amount = get_trailing_number(parts[1])
@@ -410,7 +411,7 @@ class BusinessSimulator(Module):
         # Split for nickname
         parts = name.split(" ", 1)
         if len(parts) != 2:
-            return ctx.send("You must provide the nickname of the business that you would like to rename!")
+            return await ctx.send("You must provide the nickname of the business that you would like to rename!")
 
         # Get the amount
         amount = get_trailing_number(parts[1])

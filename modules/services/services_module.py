@@ -6,14 +6,14 @@ from utils.errors import CommandRunError
 
 
 class ServicesManager(Module):
-    def __init__(self, manager):
-        super().__init__("services_manager", manager)
+    def __init__(self, engine):
+        super().__init__("services_manager", engine)
 
-        self.game_master = self.manager.get_module("game_master")
+        self.game_master = self.engine.get_module("game_master")
         if not self.game_master:
             raise RuntimeError("Cannot use the tavern simulator without the game master module.")
 
-        self.inventory_manager = self.manager.get_module("inventory_manager")
+        self.inventory_manager = self.engine.get_module("inventory_manager")
 
     def cog_check(self, ctx: commands.Context):
         if not ctx.guild:

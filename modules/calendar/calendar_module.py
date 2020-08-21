@@ -8,10 +8,10 @@ from utils import constants
 from utils.errors import CommandRunError
 
 
-class CalendarManager(Module):
-    def __init__(self, manager):
-        super().__init__("calendar_manager", manager)
-        self.game_master = self.manager.get_module("game_master")
+class CalendarManager(Module, GameStateListener):
+    def __init__(self, engine):
+        super().__init__("calendar_manager", engine)
+        self.game_master = self.engine.get_module("game_master")
         self.start_dates = dict()
         if not self.game_master:
             raise RuntimeError("Cannot use the calendar manager without the Game Master module.")
@@ -29,25 +29,51 @@ class CalendarManager(Module):
 
         await ctx.send('`An error occurred: {}`'.format(str(error)))
 
+    async def game_created(self, ctx, game):
+        pass
+
+    async def game_started(self, ctx, game):
+        calendar_days = self.get_calendar_for_context(ctx)
+        if calendar_days is None:
+            return
+
+        days_passed = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        return await ctx.send("`Today is: " + calendar.convert(calendar_days, days_passed) + "`")
+
+    async def game_about_to_end(self, ctx, game):
+        # Get our game
+        game = self.game_master.get_active_game_for_context(ctx)
+        if game is None:
+            return
+
+        # If we have an entry for this game we should unload it
+        if game.get_name() in self.start_dates:
+            await self.game_master.save_game_data(ctx, "calendar", "calendar.json", self.start_dates[game.get_name()])
+            del self.start_dates[game.get_name()]
+
+    async def game_deleted(self, ctx, game):
+        pass
+
+    async def day_passed(self, ctx, game):
+        pass
+
     async def get_calendar_for_context(self, ctx):
         # Get our game
         game = self.game_master.get_active_game_for_context(ctx)
         if game is None:
             return None
 
-        unique_id = str(ctx.guild.id) + game.get_name()
-
-        if unique_id not in self.start_dates:
+        if game.get_name() not in self.start_dates:
             data = await self.game_master.load_game_data(ctx, "calendar", "calendar.json")
 
             if data is not None:
-                self.start_dates[unique_id] = data
+                self.start_dates[game.get_name()] = data
                 return data
             else:
                 return None
 
         else:
-            return self.start_dates[unique_id]
+            return self.start_dates[game.get_name()]
 
     async def set_calendar_for_context(self, ctx, calendar):
         # Get our game
@@ -55,10 +81,8 @@ class CalendarManager(Module):
         if game is None:
             return
 
-        unique_id = str(ctx.guild.id) + game.get_name()
-        self.start_dates[unique_id] = calendar
+        self.start_dates[game.get_name()] = calendar
         await self.game_master.save_game_data(ctx, "calendar", "calendar.json", calendar)
-
 
     @commands.command(name="calendar:initialize")
     async def _calendar_initialize(self, ctx: commands.Context, *, vars: str):
@@ -108,4 +132,3 @@ class CalendarManager(Module):
 
         days_passed = self.game_master.get_active_game_for_context(ctx).get_days_passed()
         return await ctx.send("`Today is: " + calendar.convert(calendar_start_days, days_passed) + "`")
-

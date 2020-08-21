@@ -93,12 +93,16 @@ def build_service_view(parent, service):
     tags2_label.grid(row=1, column=0, columnspan=2, sticky=NSEW)
     tags2_label.config(anchor="w")
     row_count = 2
-    for item in service.get_cost_value_modifiers():
+    for item in service.get_unit_sales_modifiers():
         item_label = Label(sales_frame, text=item)
         item_label.grid(row=row_count, column=1, sticky=NSEW)
         item_label.config(anchor="w")
         row_count += 1
     sales_frame.pack(expand=1, fill="x")
+
+    # TODO: Volume modifiers
+
+    # TODO: Global modifiers
 
     obj_frame.pack(expand=1, fill="x")
     return obj_frame
@@ -218,7 +222,7 @@ def build_and_add_business_state_modifier(parent, obj: BusinessStateModifier):
     provided_frame.grid_columnconfigure(2, weight=5)
     provided_frame.grid_columnconfigure(3, weight=5)
     row_count = 0
-    for key, attribute in obj.get_provided().items():
+    for key, attribute in obj.get_state_modifiers().items():
         attribute_key = Label(provided_frame, text=attribute.get_key())
         attribute_key.grid(row=row_count, column=1, sticky=NSEW)
         attribute_key.config(anchor="w")

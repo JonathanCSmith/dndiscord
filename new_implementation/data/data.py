@@ -1,5 +1,5 @@
-import json
 import os
+import json
 from collections import OrderedDict
 
 
@@ -80,13 +80,39 @@ def dict_to_obj(our_dict):
     return obj
 
 
+class DataAccessObject:
+    def __init__(self):
+        self.payload = None
+        self.path = ""
+
+    def get_payload(self):
+        return self.payload
+
+    def set_payload(self, obj):
+        self.payload = obj
+
+    async def load(self, path):
+        self.path = path
+        self.payload = load(self.path)
+
+    async def save(self, path):
+        self.path = path
+        save(self.payload, self.path)
+
+
 def save(obj, file):
+    directory = os.path.dirname(file)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     data = json.dumps(obj, default=convert_to_dict, indent=4)
     with open(file, "w") as json_file:
         json_file.write(data)
 
 
 def load(file):
+    if not os.path.isfile(file):
+        return None
+
     with open(file, "r") as json_file:
         obj = json.load(json_file, object_hook=dict_to_obj)
         if isinstance(obj, ContextDependent):

@@ -1,7 +1,7 @@
 import os
 from collections import OrderedDict
 
-from utils import data
+from data.data_pack import DataPack
 from utils.translations import TranslationSource
 
 
@@ -55,7 +55,7 @@ class Conditional(Attribute):
 
 
 class BusinessStateModifier:
-    def __init__(self, unique_key, requirements=None, provides=None):
+    def __init__(self, unique_key, requirements=None, state_modifiers=None, property_modifiers=None):
         self.unique_key = unique_key
 
         if not requirements:
@@ -64,11 +64,17 @@ class BusinessStateModifier:
             requirements = dict()
         self.requirements = requirements
 
-        if not provides:
-            provides = dict()
-        elif not isinstance(provides, dict):
-            provides = dict()
-        self.provides = provides
+        if not state_modifiers:
+            state_modifiers = dict()
+        elif not isinstance(state_modifiers, dict):
+            state_modifiers = dict()
+        self.provides = state_modifiers
+
+        if not property_modifiers:
+            property_modifiers = dict()
+        elif not isinstance(property_modifiers, dict):
+            property_modifiers = dict()
+        self.property_modifiers = property_modifiers
 
     def get_key(self):
         return self.unique_key
@@ -79,46 +85,49 @@ class BusinessStateModifier:
     def append_prerequisite(self, condition: Conditional):
         self.requirements[condition.get_key()] = condition
 
-    def get_provided(self):
+    def get_state_modifiers(self):
         return self.provides
 
-    def append_provided(self, attribute: Attribute):
+    def append_state_modifier(self, attribute: Attribute):
         self.provides[attribute.get_key()] = attribute
 
 
 class Improvement(BusinessStateModifier):
-    def __init__(self, unique_key, cost, duration, requirements=None, provides=None):
-        super().__init__(unique_key,  requirements=requirements, provides=provides)
+    def __init__(self, unique_key, cost, duration, requirements=None, state_modifiers=None, property_modifiers=None):
+        super().__init__(unique_key, requirements=requirements, state_modifiers=state_modifiers, property_modifiers=property_modifiers)
 
         self.cost = cost
         self.duration = duration
 
 
 class Contract(BusinessStateModifier):
-    def __init__(self, unique_key, cost, duration, requirements=None, provides=None):
-        super().__init__(unique_key, requirements=requirements, provides=provides)
+    def __init__(self, unique_key, cost, duration, requirements=None, state_modifiers=None, property_modifiers=None):
+        super().__init__(unique_key, requirements=requirements, state_modifiers=state_modifiers, property_modifiers=property_modifiers)
 
         self.cost = cost
         self.duration = duration
 
 
 class Employee(BusinessStateModifier):
-    def __init__(self, unique_key, cost_per_day, requirements=None, provides=None):
-        super().__init__(unique_key, requirements=requirements, provides=provides)
+    def __init__(self, unique_key, cost_per_day, requirements=None, state_modifiers=None, property_modifiers=None):
+        super().__init__(unique_key, requirements=requirements, state_modifiers=state_modifiers, property_modifiers=property_modifiers)
 
         self.cost_per_day = cost_per_day
 
 
 class ServiceOffered(BusinessStateModifier):
-    def __init__(self, unique_key, cost_price, sale_price, cost_value_modifiers=None, sale_value_modifiers=None, requirements=None, provides=None):
-        super().__init__(unique_key, requirements=requirements, provides=provides)
+    global_maximum_service_amount_of_units_offered = "maximum_service_amount_offered"
+    global_service_unit_cost_modifier = "all_unit_costs_modifier"
+
+    def __init__(self, unique_key, cost_price, sale_price, cost_value_modifiers=None, sale_value_modifiers=None, volume_available_modifiers=None, requirements=None, state_modifiers=None, property_modifiers=None):
+        super().__init__(unique_key, requirements=requirements, state_modifiers=state_modifiers, property_modifiers=property_modifiers)
 
         self.cost_price = cost_price
         self.sale_price = sale_price
 
         if cost_value_modifiers is None:
             cost_value_modifiers = list()
-        self.cost_value_modifiers = ["all_unit_costs_modifier", self.unique_key + "_unit_costs_modifier"]
+        self.cost_value_modifiers = [ self.unique_key + "_unit_costs_modifier"]
         for item in cost_value_modifiers:
             if item not in self.cost_value_modifiers:
                 self.cost_value_modifiers.append(item)
@@ -130,16 +139,38 @@ class ServiceOffered(BusinessStateModifier):
             if item not in self.sale_value_modifiers:
                 self.sale_value_modifiers.append(item)
 
+        if volume_available_modifiers is None:
+            volume_available_modifiers = list()
+        self.volume_available_modifiers = [self.unique_key + "_volume_available_modifier"]
+        for item in volume_available_modifiers:
+            if item not in self.volume_available_modifiers:
+                self.volume_available_modifiers.append(item)
+
     def get_cost_value_modifiers(self):
         return self.cost_value_modifiers
+
+    def get_unit_sales_modifiers(self):
+        return self.sale_value_modifiers
+
+    def get_volume_modifiers(self):
+        return self.volume_available_modifiers
 
     def __str__(self):
         return self.unique_key + " are offered for " + str(self.sale_price) + "cp and cost " + str(self.cost_price) + "cp per unit sold / offered"
 
 
+class ServiceState:
+    def __init__(self, volume_offered, cost, price):
+        self.volume_offered = volume_offered
+        self.cost_price = cost
+        self.sale_price = price
+
+
 class Customer(BusinessStateModifier):
-    def __init__(self, unique_key, customer_tier, popularity_modifiers=None, occupancy_modifiers=None, services_consumed=None, requirements=None, provides=None):
-        super().__init__(unique_key, requirements=requirements, provides=provides)
+    all_customers_maximum_occupancy_modifier = "all_customers_maximum_occupancy_modifier"
+
+    def __init__(self, unique_key, customer_tier, popularity_modifiers=None, occupancy_modifiers=None, services_consumed=None, requirements=None, state_modifiers=None, property_modifiers=None):
+        super().__init__(unique_key, requirements=requirements, state_modifiers=state_modifiers, property_modifiers=property_modifiers)
 
         self.customer_tier = customer_tier
 
@@ -149,14 +180,14 @@ class Customer(BusinessStateModifier):
 
         if popularity_modifiers is None:
             popularity_modifiers = list()
-        self.popularity_modifiers = ["all_popularity_modifier", self.unique_key + "_popularity_modifier"]
+        self.popularity_modifiers = [self.unique_key + "_popularity_modifier"]
         for item in popularity_modifiers:
             if item not in self.popularity_modifiers:
                 self.popularity_modifiers.append(item)
 
         if occupancy_modifiers is None:
             occupancy_modifiers = list()
-        self.occupancy_modifiers = ["all_customers_maximum_occupancy_modifier", self.unique_key + "_maximum_occupancy_modifier"]
+        self.occupancy_modifiers = [self.unique_key + "_maximum_occupancy_modifier"]
         for item in occupancy_modifiers:
             if item not in self.occupancy_modifiers:
                 self.occupancy_modifiers.append(item)
@@ -195,33 +226,34 @@ class BusinessDataPack:
     @classmethod
     async def load(cls, manager, ctx, original_path_modifier, data_pack_name=None):
         if data_pack_name is not None:
-            path_modifier = os.path.join(original_path_modifier, data_pack_name)
+            pack_name = data_pack_name
+            pack_path = os.path.join(original_path_modifier, data_pack_name)
         else:
             pack_name = os.path.basename(original_path_modifier)
-            path_modifier = "".join(original_path_modifier.rsplit(pack_name, 1))
+            pack_path = original_path_modifier
 
         # Try loading from our guilds path
         is_guild = True
-        data_pack_data = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "data_pack.json")
-        initial = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "initial.json")
-        services = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "services.json")
-        employees = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "employees.json")
-        customers = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "customers.json")
-        improvements = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "improvements.json")
-        contracts = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "contracts.json")
-        translations = await manager.load_data_from_data_path_for_guild(ctx, path_modifier, "translation_index.json")
+        data_pack_data = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "data_pack.json")
+        initial = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "initial.json")
+        services = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "services.json")
+        employees = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "employees.json")
+        customers = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "customers.json")
+        improvements = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "improvements.json")
+        contracts = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "contracts.json")
+        translations = await manager.load_data_from_data_path_for_guild(ctx, pack_path, "translation_index.json")
 
         # Try our backup, which is in the bot root
         if initial is None and services is None and employees is None and customers is None and improvements is None and contracts is None:
             is_guild = False
-            data_pack_data = await manager.load_data_from_data_path(path_modifier, "data_pack.json")
-            initial = await manager.load_data_from_data_path(path_modifier, "initial.json")
-            services = await manager.load_data_from_data_path(path_modifier, "services.json")
-            employees = await manager.load_data_from_data_path(path_modifier, "employees.json")
-            customers = await manager.load_data_from_data_path(path_modifier, "customers.json")
-            improvements = await manager.load_data_from_data_path(path_modifier, "improvements.json")
-            contracts = await manager.load_data_from_data_path(path_modifier, "contracts.json")
-            translations = await manager.load_data_from_data_path(path_modifier, "translation_index.json")
+            data_pack_data = await manager.load_data_from_data_path(pack_path, "data_pack.json")
+            initial = await manager.load_data_from_data_path(pack_path, "initial.json")
+            services = await manager.load_data_from_data_path(pack_path, "services.json")
+            employees = await manager.load_data_from_data_path(pack_path, "employees.json")
+            customers = await manager.load_data_from_data_path(pack_path, "customers.json")
+            improvements = await manager.load_data_from_data_path(pack_path, "improvements.json")
+            contracts = await manager.load_data_from_data_path(pack_path, "contracts.json")
+            translations = await manager.load_data_from_data_path(pack_path, "translation_index.json")
 
         # Output nothing if there is nothing loaded. Any data whatsoever, and we assume it's correct
         if initial is None and services is None and employees is None and customers is None and improvements is None and contracts is None:
@@ -229,16 +261,16 @@ class BusinessDataPack:
 
         # If we have translations to load
         if translations:
-            await manager.load_translations_package(ctx, TranslationSource("business." + pack_name, path_modifier, translations, is_guild))
+            await manager.load_translations_package(ctx, TranslationSource("business." + pack_name, pack_path, translations, is_guild))
 
-        return BusinessDataPack(original_path_modifier, is_guild, data_pack_data=data_pack_data, initial=initial, services=services, employees=employees, customers=customers, improvements=improvements, contracts=contracts)
+        return BusinessDataPack(pack_name, pack_path, is_guild, data_pack_data=data_pack_data, initial=initial, services=services, employees=employees, customers=customers, improvements=improvements, contracts=contracts)
 
     def __init__(self, name, path_modifier, is_guild, business_name=None, description=None, data_pack_data=None, initial=None, services=None, employees=None, customers=None, improvements=None, contracts=None):
         self.name = name
         if " " in self.name:
             raise RuntimeError("You cannot have spaces inside data pack names.")
 
-        self.path_modifier = path_modifier
+        self.path = path_modifier
         self.is_guild = is_guild
 
         if not initial:
@@ -276,7 +308,7 @@ class BusinessDataPack:
         return self.name
 
     def get_path(self):
-        return self.path_modifier
+        return self.path
 
     def get_business_name(self):
         return self.data_pack_data.business_name
@@ -357,7 +389,7 @@ class BusinessDataPack:
         return None
 
     async def save(self, manager=None, ctx=None):
-        save_path = os.path.join(self.path_modifier, self.name)
+        save_path = self.path
         if self.is_guild:
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "data_pack.json", self.data_pack_data)
             await manager.save_data_in_data_path_for_guild(ctx, save_path, "initial.json", self.initial)

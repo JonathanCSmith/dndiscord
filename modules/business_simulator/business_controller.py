@@ -1,4 +1,7 @@
-from modules.business_simulator.model.data_pack import FixedAttribute, BusinessDataPack, Employee, Improvement, Contract
+import os
+from collections import OrderedDict
+
+from modules.business_simulator.model.data_pack import FixedAttribute, BusinessDataPack, Employee, Improvement, Contract, Customer, ServiceOffered, ServiceState
 from modules.business_simulator.model.business_model import BusinessStatus
 
 """
@@ -11,18 +14,20 @@ class BusinessController:
     async def create_business(cls, game_master, ctx, data_pack, name):
         business = BusinessController(name)
         await business.set_data_pack(data_pack)
-        await game_master.save_game_data(ctx, "business", name, business.get_business_status())
+        await game_master.save_game_data(ctx, "businesses", name, business.get_business_status())
         return business
 
     @classmethod
-    async def load_business(cls, manager, game_master, ctx, business_name):
+    async def load_business(cls, engine, game_master, ctx, business_name):
         # Load our business
-        business_status = await game_master.load_game_data(ctx, "businesses", business_name)
+        #business_status = await game_master.load_game_data(ctx, "businesses", business_name)
+        business_status = await game_master.load_game_specific_data(engine, ctx, os.path.join("businesses", business_name))
         if not business_status:
             return None
 
         # Check we have data packs available
-        data_pack = await BusinessDataPack.load(manager, ctx, business_status.data_pack_path)
+        #data_pack = await BusinessDataPack.load(manager, ctx, business_status.data_pack_path)
+        data_pack = await engine.get_file_manager().load_data_pack_by_path(business_status.data_pack_path)
         if not data_pack:
             return "`Could not load the data pack for business: " + business_name + "`"
 
@@ -52,7 +57,7 @@ class BusinessController:
         self.recorded_removed_state_modifiers = dict()
 
         # The business state descriptors
-        self.properties = dict()
+        self.properties = OrderedDict()  # We could rely on 3.7 here but I suspect its better to be explicit
         self.implied_inactive_state_modifiers = list()
         self.active_improvements = list()
         self.active_contracts = list()
@@ -60,12 +65,12 @@ class BusinessController:
         self.possible_improvements = list()
         self.possible_contracts = list()
         self.possible_employee_types = list()
-        self.available_services = list()
+        self.available_services = dict()
         self.available_customers = list()
 
         # Current non-serialized properties
+        self.current_maximum_occupancy = 0
         self.provided = dict()
-        self.max_occupancy = 0
         self.current_services_offered = dict()
         self.visiting_customers = list()
         self.maximum_customers_satisfied = dict()
@@ -124,17 +129,50 @@ class BusinessController:
     def get_improvements(self):
         return self.active_improvements
 
+    async def apply_improvement(self, improvement, amount, current_day):
+        if improvement not in self.possible_improvements:
+            print("There is something wrong - someone told us we could load: " + improvement + " but the data pack could not find it!")
+            return False
+
+        # Apply it to our history and our current controller
+        await self.business_status.purchase_improvement(self, improvement, current_day, amount)
+
+        # Recalc what purchases can be applied
+        await self.recalculate_state_views()
+
     def get_contractable(self):
         return self.possible_contracts
 
     def get_contracts(self):
         return self.active_contracts
 
+    async def apply_contract(self, contract, amount, start_date):
+        if contract not in self.possible_contracts:
+            print("There is something wrong - someone told us we could load: " + contract + " but the data pack could not find it!")
+            return
+
+        # Apply it to our history and our current controller
+        await self.business_status.purchase_contract(self, contract, start_date, negotiated_amount=amount)
+
+        # Recalc what purchases can be applied
+        await self.recalculate_state_views()
+
     def get_hireable(self):
         return self.possible_employee_types
 
     def get_employees(self):
         return self.active_employees
+
+    async def hire_employee(self, employee_type, name, start_date):
+        if employee_type not in self.possible_employee_types:
+            print("There is something wrong - someone told us we could load: " + employee_type + " but the data pack could not find it!")
+            return
+
+        # Apply it to our history and our current controller
+        await self.business_status.hire_employee(self, employee_type, name, start_date)
+
+        # Recalc what purchases can be applied
+        await self.recalculate_state_views()
 
     def get_interested_customers(self):
         return self.available_customers
@@ -148,23 +186,18 @@ class BusinessController:
     def get_most_recent_sales_history(self):
         return self.business_status.get_sales_history_for_week(-1)
 
+    def get_maximum_occupancy(self):
+        return self.current_maximum_occupancy
+
+    def set_maximum_occupancy(self, value):
+        self.current_maximum_occupancy = value
+
     async def save(self, game_master, ctx):
         await game_master.save_game_data(ctx, "businesses", self.get_name(), self.business_status)
 
     """
-    Business Simulation Mechanics
+    Business State Machine Mechanics
     """
-    def __clear_state_views(self):
-        self.active_improvements.clear()
-        self.active_contracts.clear()
-        self.active_employees.clear()
-        self.available_services.clear()
-        self.available_customers.clear()
-        self.properties.clear()
-        self.implied_inactive_state_modifiers.clear()
-        self.possible_improvements.clear()
-        self.possible_contracts.clear()
-        self.possible_employee_types.clear()
 
     async def recalculate_state_views(self):
         self.__clear_state_views()
@@ -195,6 +228,25 @@ class BusinessController:
             else:
                 unchecked = cant_apply
 
+        # Recalc our basic business properties
+        await self.__determine_self_occupancy()
+
+        # Available services & amounts
+        all_services = self.data_pack.get_services()
+        for service in all_services:
+            if await self.__can_apply(service):
+                amount_of_service_provided = await self.__calculate_amount_of_service_provided(service)
+                cost_price_of_service = await self.__calculate_cost_price_of_service(service)
+                sale_price_of_service = await self.__calculate_sale_price_of_service(service)
+                service_state = ServiceState(amount_of_service_provided, cost_price_of_service, sale_price_of_service)
+                self.available_services[service.get_key()] = service_state
+
+        # Available customers
+        all_customers = self.data_pack.get_customers()
+        for customer in all_customers:
+            if await self.__can_apply(customer) and await self.__can_supply(customer):
+                self.available_customers.append(customer)
+
         # Determine purchaseables
         all_purchaseables = self.data_pack.get_improvements()
         for purchaseable in all_purchaseables:
@@ -211,17 +263,17 @@ class BusinessController:
             if await self.__can_apply(purchaseable):
                 self.possible_employee_types.append(purchaseable)
 
-        # Available services
-        all_services = self.data_pack.get_services()
-        for service in all_services:
-            if await self.__can_apply(service):
-                self.available_services.append(service)
-
-        # Available customers
-        all_customers = self.data_pack.get_customers()
-        for customer in all_customers:
-            if await self.__can_apply(customer):
-                self.available_customers.append(customer)
+    def __clear_state_views(self):
+        self.active_improvements.clear()
+        self.active_contracts.clear()
+        self.active_employees.clear()
+        self.available_services.clear()
+        self.available_customers.clear()
+        self.properties.clear()
+        self.implied_inactive_state_modifiers.clear()
+        self.possible_improvements.clear()
+        self.possible_contracts.clear()
+        self.possible_employee_types.clear()
 
     async def _record_active_state_modifiers(self, key, state_modifier):
         if key in self.recorded_inactive_state_modifiers:
@@ -249,39 +301,6 @@ class BusinessController:
             del self.recorded_inactive_state_modifiers[key]
 
         self.recorded_removed_state_modifiers[key] = state_modifier
-
-    async def apply_improvement(self, improvement, amount, current_day):
-        if improvement not in self.possible_improvements:
-            print("There is something wrong - someone told us we could load: " + improvement + " but the data pack could not find it!")
-            return False
-
-        # Apply it to our history and our current controller
-        await self.business_status.purchase_improvement(self, improvement, current_day, amount)
-
-        # Recalc what purchases can be applied
-        await self.recalculate_state_views()
-
-    async def apply_contract(self, contract, amount, start_date):
-        if contract not in self.possible_contracts:
-            print("There is something wrong - someone told us we could load: " + contract + " but the data pack could not find it!")
-            return
-
-        # Apply it to our history and our current controller
-        await self.business_status.purchase_contract(self, contract, start_date, negotiated_amount=amount)
-
-        # Recalc what purchases can be applied
-        await self.recalculate_state_views()
-
-    async def hire_employee(self, employee_type, name, start_date):
-        if employee_type not in self.possible_employee_types:
-            print("There is something wrong - someone told us we could load: " + employee_type + " but the data pack could not find it!")
-            return
-
-        # Apply it to our history and our current controller
-        await self.business_status.hire_employee(self, employee_type, name, start_date)
-
-        # Recalc what purchases can be applied
-        await self.recalculate_state_views()
 
     async def __can_apply(self, appliable):
         # Gather the prerequisites
@@ -370,21 +389,28 @@ class BusinessController:
 
         return True
 
+    async def __can_supply(self, customer):
+        services_required = customer.get_consumed_services()
+        for service_consumed in services_required:
+            if service_consumed not in self.available_services:
+                return False
+
+        return True
+
     async def __apply_state_modifier(self, state):
         for key, attribute in state.provides.items():
-            await self.__apply_attribute(attribute)
+            current_value = ""
+            if key in self.properties:
+                current_value = self.properties[key]
 
-    async def __apply_attribute(self, attribute):
+            await self.__apply_attribute(attribute, current_value)
+
+    async def __apply_attribute(self, attribute, current_val):
         if isinstance(attribute, FixedAttribute):
             self.properties[attribute.get_key()] = attribute.get_value()
         else:
-            if attribute.get_key() not in self.properties:
-                self.properties[attribute.get_key()] = attribute.get_value()
-                return
-
             # Depending on our type.
             type = attribute.get_type()
-            current_val = self.properties[attribute.get_key()]
 
             # We can count this as being empty
             if current_val == "":
@@ -411,6 +437,46 @@ class BusinessController:
                     current_val = modifying_val
 
             self.properties[attribute.get_key()] = current_val
+
+    async def __determine_self_occupancy(self):
+        if Customer.all_customers_maximum_occupancy_modifier in self.properties:
+            self.set_maximum_occupancy(self.properties[Customer.all_customers_maximum_occupancy_modifier])
+        else:
+            self.set_maximum_occupancy(0)
+
+    async def __calculate_amount_of_service_provided(self, service):
+        modifier_tags = service.get_volume_modifiers()
+        modifier_tags.append(ServiceOffered.global_maximum_service_amount_of_units_offered)
+        results = list()
+        for modifier_tag in modifier_tags:
+            if modifier_tag in self.properties:
+                results.append(self.properties[modifier_tag])
+
+        return min(results)
+
+    async def __calculate_cost_price_of_service(self, service):
+        base_cost = service.cost
+        modifier_tags = service.get_cost_value_modifiers()
+        modifier_tags.append(ServiceOffered.global_service_unit_cost_modifier)
+        for modifier_tag in modifier_tags:
+            if modifier_tag in self.properties:
+                self.__apply_attribute()
+
+        pass
+
+    async def __calculate_sale_price_of_service(self, service):
+        pass
+    #
+    # def determine_visiting_patron_types(self):
+    #     for patron_type in self.data_pack.get_patrons():
+    #         if self.provides_for(patron_type):
+    #             self.visiting_patrons.append(patron_type)
+
+    """
+    Business Simulation Mechanics
+    """
+    async def pass_day(self, ctx, game):
+        pass
 
     """
     OLD ZONE IS BELOW
@@ -491,12 +557,6 @@ class BusinessController:
     #
     #         remaining_purchases = sz
     #
-    # def get_maximum_occupancy(self):
-    #     return self.max_occupancy
-    #
-    # def set_maximum_occupancy(self, value):
-    #     self.max_occupancy = value
-    #
     # def add_service_offered(self, service, max_offered):
     #     self.provided.update(service.get_provided())
     #     self.current_services_offered[service.name] = max_offered
@@ -548,12 +608,6 @@ class BusinessController:
     #     :return:
     #     """
     #
-    #     # Calculate our flat max occupancy
-    #     self.determine_max_occupancy()
-    #
-    #     # Identify which services we can provide
-    #     self.determine_available_services()
-    #
     #     # Determine what patron types are available to us
     #     self.determine_visiting_patron_types()
     #
@@ -572,51 +626,6 @@ class BusinessController:
     #
     #     Fixed earnings
     #     """
-    #
-    # def determine_max_occupancy(self):
-    #     max_occupancy_modifiers = list()
-    #     for improvement_key in self.business_status.get_purchases():
-    #         improvement = self.data_pack.get_improvement(improvement_key)
-    #         max_occupancy_modifiers.extend(improvement.get_provided_value(Patron.maximum_occupancy_limit_tag))
-    #     self.set_maximum_occupancy(sum(max_occupancy_modifiers))
-    #
-    # def determine_available_services(self):
-    #     # TODO: Move away from sets as it would allow for multiple of the same requirements
-    #     for service in self.data_pack.get_services():
-    #         remaining_requirements = set(service.get_prerequisites())
-    #
-    #         # Remove any things provided by our improvements
-    #         for improvement_key in self.business_status.get_purchases():
-    #             improvement = self.data_pack.get_improvement(improvement_key)
-    #             provided = improvement.get_provided()
-    #             remaining_requirements = remaining_requirements.difference(provided)
-    #
-    #         # Remove any things provided by our staff:
-    #         for staff in self.business_status.get_staff():
-    #             staff_archetype = self.data_pack.get_staff_archetype(staff)
-    #             provided = staff_archetype.get_provided()
-    #             remaining_requirements = remaining_requirements.difference(provided)
-    #
-    #         # If all of our requirements were satisfied add the service and calculate the max supplied
-    #         if len(remaining_requirements) == 0:
-    #             max_modifier_tags = service.get_maximum_of_service_offered_tags()
-    #
-    #             # Check our improvement for inhibitions
-    #             applicable_values = list()
-    #             for improvement_key in self.business_status.get_purchases():
-    #                 improvement = self.data_pack.get_improvement(improvement_key)
-    #                 applicable_values.extend(improvement.get_provided_value(max_modifier_tags))
-    #
-    #             if len(applicable_values) == 0:
-    #                 max_sales_of_service = 0
-    #             else:
-    #                 max_sales_of_service = min(applicable_values)
-    #             self.add_service_offered(service, max_sales_of_service)
-    #
-    # def determine_visiting_patron_types(self):
-    #     for patron_type in self.data_pack.get_patrons():
-    #         if self.provides_for(patron_type):
-    #             self.visiting_patrons.append(patron_type)
     #
     # def simulate_attendance(self, tenday):
     #     # Simulate the number and type of patrons served

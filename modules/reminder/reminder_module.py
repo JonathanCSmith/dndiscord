@@ -4,6 +4,7 @@ from module_properties import Module
 from modules.game.game_state_listener import GameStateListener
 from utils import constants
 from utils.errors import CommandRunError
+from utils.messages import LongMessage
 from utils.strings import get_trailing_number
 
 
@@ -14,9 +15,9 @@ class Reminder:
 
 
 class ReminderManager(Module, GameStateListener):
-    def __init__(self, manager):
-        super().__init__("reminder_manager", manager)
-        self.game_master = self.manager.get_module("game_master")
+    def __init__(self, engine):
+        super().__init__("reminder_manager", engine)
+        self.game_master = self.engine.get_module("game_master")
         self.reminders = dict()
         if self.game_master:
             self.game_master.register_game_state_listener(self)
@@ -70,7 +71,28 @@ class ReminderManager(Module, GameStateListener):
         return
 
     async def game_started(self, ctx, game):
-        return
+        # Get the game, which cannot be None at this point because of the above
+        game = self.game_master.get_active_game_for_context(ctx)
+        current_days = game.get_days_passed()
+
+        # Obtain any existing
+        reminders = await self.get_reminders_for_context(ctx)
+        long_message = LongMessage()
+        long_message.add("===================================")
+        if reminders is None or len(reminders) == 0:
+            long_message.add("You have nothing to do today! How nice :)")
+        else:
+            for reminder in reminders:
+                if reminder.reminder_day == current_days:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " today.")
+                elif reminder.reminder_day > current_days:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " in " + str(reminder.reminder_day - current_days) + " days.")
+        long_message.add("===================================")
+
+        # Output
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.send(message)
 
     async def game_about_to_end(self, ctx, game):
         return
@@ -80,26 +102,31 @@ class ReminderManager(Module, GameStateListener):
 
     async def day_passed(self, ctx, game):
         game = self.game_master.get_active_game_for_context(ctx)
-        reminders = await self.get_reminders_for_context(ctx)
         current_day = game.get_days_passed()
 
         # Notify the channel of any reminders
-        found = False
+        reminders = await self.get_reminders_for_context(ctx)
         to_remove = list()
-        for reminder in reminders:
-            if reminder.reminder_day == current_day:
-                await ctx.send("`[REMINDER]: You are supposed to do: " + reminder.item + " today.`")
-                found = True
-            elif reminder.reminder_day < current_day:
-                to_remove.append(reminder)
+        long_message = LongMessage()
+        long_message.add("===================================")
+        if reminders is None or len(reminders) == 0:
+            long_message.add("You have nothing to do today! How nice :)")
+        else:
+            for reminder in reminders:
+                if reminder.reminder_day == current_day:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " today.")
+                elif reminder.reminder_day < current_day:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " in " + str(reminder.reminder_day - current_day) + " days.")
+        long_message.add("===================================")
 
         # Remove the reminders we have already triggered
         for reminder in to_remove:
             reminders.remove(reminder)
 
-        # Notify if nothing
-        if not found:
-            return await ctx.send("`You have nothing to do today! How nice :)`")
+        # Output
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.send(message)
 
         # Save
         await self.set_reminders_for_context(ctx, reminders)
@@ -145,17 +172,21 @@ class ReminderManager(Module, GameStateListener):
         current_days = game.get_days_passed()
 
         # Obtain any existing
-        found = False
         reminders = await self.get_reminders_for_context(ctx)
-        for reminder in reminders:
-            if reminder.reminder_day == current_days:
-                await ctx.send("`[REMINDER]: You are supposed to do: " + reminder.item + " today.`")
-                found = True
-
-        if found:
-            return await ctx.send("`That is all that remains in your todo list!`")
+        long_message = LongMessage()
+        long_message.add("===================================")
+        if reminders is None or len(reminders) == 0:
+            long_message.add("You have nothing to do today! How nice :)")
         else:
-            return await ctx.send("`You have nothing to do today! How nice :)`")
+            for reminder in reminders:
+                if reminder.reminder_day == current_days:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " today.")
+        long_message.add("===================================")
+
+        # Output
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.send(message)
 
     @commands.command(name="reminders")
     async def _all_reminders(self, ctx: commands.Context):
@@ -171,5 +202,19 @@ class ReminderManager(Module, GameStateListener):
         # Obtain any existing
         reminders = await self.get_reminders_for_context(ctx)
         reminders.sort(key=lambda x: x.reminder_day)
-        for reminder in reminders:
-            await ctx.send("`[REMINDER]: You are supposed to do: " + reminder.item + " in " + str(reminder.reminder_day - current_days) + " days.`")
+        long_message = LongMessage()
+        long_message.add("===================================")
+        if reminders is None or len(reminders) == 0:
+            long_message.add("You have nothing to do today! How nice :)")
+        else:
+            for reminder in reminders:
+                if reminder.reminder_day == current_days:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " today.")
+                elif reminder.reminder_day > current_days:
+                    long_message.add("[REMINDER]: You are supposed to do: " + reminder.item + " in " + str(reminder.reminder_day - current_days) + " days.")
+        long_message.add("===================================")
+
+        # Output
+        async with ctx.typing():
+            for message in long_message:
+                await ctx.send(message)

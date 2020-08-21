@@ -3,6 +3,7 @@ import shutil
 
 from discord.ext import commands
 
+from data.file_system import BotFileSystem
 from modules.calendar.calendar_module import CalendarManager
 from modules.inventory.inventory_module import InventoryManager
 from modules.game.game_master import GameMaster
@@ -45,7 +46,28 @@ class DNDiscordDataStore:
         return None
 
 
-class DNDiscordBot:
+class EditMessageReceiveBot(commands.Bot):
+    def __init__(self, **options):
+        super().__init__(**options)
+
+    # Replay messages on edit
+    async def on_message_edit(self, before, after):
+        await self.on_message(after)
+
+
+class Engine:
+    def __init__(self, file_manager):
+        self.file_manager = file_manager
+        self.translation_manager = TranslationManager()
+
+    def get_file_manager(self):
+        return self.file_manager
+
+    def get_translation_manager(self):
+        return self.translation_manager
+
+
+class DNDiscordBot(Engine):
     is_music_module_enabled = True
     is_inventory_module_enabled = True
     is_business_module_enabled = True
@@ -55,14 +77,13 @@ class DNDiscordBot:
     is_reminder_module_enabled = True
 
     def __init__(self, token):
+        super().__init__(BotFileSystem(os.path.join(".", "bot_data")))
         self.token = token
-        self.data_path = os.path.join(".", "bot_data")
-        self.data_store = None
         self.modules = dict()
         self.translation_manager = TranslationManager()
         self.current_localization = "default"
         self.description = '''dnd is AWESOME'''
-        self.bot = commands.Bot(command_prefix='!', description=self.description)
+        self.bot = EditMessageReceiveBot(command_prefix='!', description=self.description)
         self.add_basic_commands(self.bot)
 
         # We should always enable our game manager as it manages permissions and data!
@@ -118,68 +139,6 @@ class DNDiscordBot:
 
     def get_bot_member(self, ctx):
         return ctx.guild.get_member(ctx.bot.user.id)
-
-    def _get_guild_folder_path(self, ctx):
-        return os.path.join(self.data_path, "guilds", str(ctx.guild.id))
-
-    def _get_user_folder_path(self, ctx):
-        return os.path.join(self.data_path, "users", str(ctx.author.id))
-
-    async def load_data_from_data_path_for_guild(self, ctx, path_modifier, file_name):
-        folder_path = os.path.join(self._get_guild_folder_path(ctx), path_modifier)
-        return await self._load_data_from_complete_folder_path(folder_path, file_name)
-
-    async def load_data_from_data_path_for_user(self, ctx, path_modifier, file_name):
-        folder_path = os.path.join(self._get_user_folder_path(ctx), path_modifier)
-        return await self._load_data_from_complete_folder_path(folder_path, file_name)
-
-    async def load_data_from_data_path(self, path_modifier, file_name):
-        folder_path = os.path.join(self.data_path, path_modifier)
-        return await self._load_data_from_complete_folder_path(folder_path, file_name)
-
-    async def _load_data_from_complete_folder_path(self, folder_path, file_name):
-        if not file_name.endswith(".json"):
-            file_name += ".json"
-
-        file = os.path.join(folder_path, file_name)
-        if not os.path.isfile(file):
-            return None
-        else:
-            return data.load(file)
-
-    async def save_data_in_data_path_for_guild(self, ctx, path_modifier, file_name, item_to_save):
-        folder_path = os.path.join(self._get_guild_folder_path(ctx), path_modifier)
-        await self._save_data_in_complete_folder_path(folder_path, file_name, item_to_save)
-
-    async def save_data_in_data_path_for_user(self, ctx, path_modifier, file_name, item_to_save):
-        folder_path = os.path.join(self._get_user_folder_path(ctx), path_modifier)
-        await self._save_data_in_complete_folder_path(folder_path, file_name, item_to_save)
-
-    async def save_data_in_data_path(self, path_modifier, file_name, item_to_save):
-        folder_path = os.path.join(self.data_path, path_modifier)
-        await self._save_data_in_complete_folder_path(folder_path, file_name, item_to_save)
-
-    async def _save_data_in_complete_folder_path(self, folder_path, file_name, item_to_save):
-        if not file_name.endswith(".json"):
-            file_name += ".json"
-
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
-        file = os.path.join(folder_path, file_name)
-        data.save(item_to_save, file)
-
-    async def delete_in_data_path_for_guild(self, ctx, path_modifier):
-        await self.__delete(os.path.join(self._get_guild_folder_path(ctx), path_modifier))
-
-    async def __delete(self, path):
-        path = os.path.join(self.data_path, path)
-        if os.path.exists(path):
-            shutil.rmtree(path)
-
-    async def create(self, path):
-        path = os.path.join(self.data_path, path)
-        os.makedirs(path)
 
     async def get_translation_for_current_localization(self, ctx, key):
         return await self.translation_manager.get_translation(self.current_localization, ctx, key)

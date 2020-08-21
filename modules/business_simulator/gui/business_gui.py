@@ -356,8 +356,8 @@ class BusinessGUI(Tk):
         overview_frame = Frame(self.simulation_controls)
         test_label = Label(overview_frame, text="Simulation Controls:")
         test_label.grid(column=0, row=0)
-
         overview_frame.pack(expand=0, fill="x")
+
         views = ttk.LabelFrame(self.simulation_controls, text="Views:")
         discord_view = Button(views, text="Toggle Discord", command=self.toggle_discord)
         discord_view.grid(column=0, row=0)
@@ -431,6 +431,7 @@ class BusinessGUI(Tk):
         if hasattr(self, "simulation_purchaseable") and self.simulation_purchaseable is not None:
             self.simulation_purchaseable.pack_forget()
             self.simulation_purchaseable.destroy()
+
 
 if __name__ == "__main__":
     gui = BusinessGUI()

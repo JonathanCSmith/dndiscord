@@ -64,8 +64,8 @@ TODO: Documentation
 
 class GameMaster(Module):
 
-    def __init__(self, manager):
-        super().__init__("game_master", manager)
+    def __init__(self, engine):
+        super().__init__("game_master", engine)
 
         self.guild_data = dict()
         self.active_sessions = dict()
@@ -223,13 +223,13 @@ class GameMaster(Module):
         if not self.is_game_running_for_context(ctx):
             raise RuntimeError("Cannot load data for a game if there is no game running!")
         game = self.get_active_game_for_context(ctx)
-        return await self.manager.load_data_from_data_path_for_guild(ctx, os.path.join(game.get_name(), path_modifier), file_name)
+        return await self.engine.load_data_from_data_path_for_guild(ctx, os.path.join(game.get_name(), path_modifier), file_name)
 
     async def save_game_data(self, ctx, path_modifier, file_name, item_to_save):
         if not self.is_game_running_for_context(ctx):
             raise RuntimeError("Cannot save data for a game if there is no game running!")
         game = self.get_active_game_for_context(ctx)
-        await self.manager.save_data_in_data_path_for_guild(ctx, os.path.join(game.get_name(), path_modifier), file_name, item_to_save)
+        await self.engine.save_data_in_data_path_for_guild(ctx, os.path.join(game.get_name(), path_modifier), file_name, item_to_save)
 
     def get_active_game_for_context(self, ctx):
         if not self.is_game_running_for_context(ctx):
@@ -261,7 +261,7 @@ class GameMaster(Module):
     async def __delete_game(self, ctx: commands.Context, game):
         guild_data = await self.__get_guild_data(ctx)
         guild_data.remove_game(game)
-        self.manager.delete_in_data_path_for_guild(ctx, os.path.join("game", game.game_name))
+        self.engine.delete_in_data_path_for_guild(ctx, os.path.join("game", game.game_name))
         return await self.__save_guild_data(ctx, guild_data)
 
     async def __get_guild_data(self, ctx):
@@ -270,7 +270,7 @@ class GameMaster(Module):
 
         # If we don't have it in memory we should try to load it from disk
         if guild_id not in self.guild_data:
-            data = await self.manager.load_data_from_data_path_for_guild(ctx, "", "game_master_info.json")
+            data = await self.engine.load_data_from_data_path_for_guild(ctx, "", "game_master_info.json")
 
         # Create the guild data
         if data is None:
@@ -281,7 +281,7 @@ class GameMaster(Module):
         return data
 
     async def __save_guild_data(self, ctx, guild_data):
-        await self.manager.save_data_in_data_path_for_guild(ctx, "", "game_master_info.json", guild_data)
+        await self.engine.save_data_in_data_path_for_guild(ctx, "", "game_master_info.json", guild_data)
         self.guild_data[ctx.guild.id] = guild_data
 
     @commands.group(name="game")

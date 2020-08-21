@@ -1,0 +1,10 @@
+# TODO
+    Investigate mentions for nicknamed members when adding players
+    A user can have the same game name across multiple guilds. Guilds is guaranteed to be unique.
+    Audio impl
+    Days may be something best not placed in 'game' and may just be better in calendar and don't try to make it generic. The issue with this is the listener system
+    Scenes!
+
+# Done
+    I Removed a user specifiable channel for audio player notifications.
+    Up enter not working again

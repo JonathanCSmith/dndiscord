@@ -26,6 +26,8 @@ class Bard:
 
         self.audio_player = bot.loop.create_task(self.audio_player_task())
 
+        self.info = None
+
     def __del__(self):
         self.audio_player.cancel()
 
@@ -53,27 +55,27 @@ class Bard:
         return self.voice is not None and self.current is not None
 
     async def audio_player_task(self):
-        while True:
-            self.next.clear()
+        try:
+            while True:
+                self.next.clear()
 
-            if not self.loop:
-                # Try to get the next song within 3 minutes.
-                # If no song will be added to the queue in time,
-                # the player will disconnect due to performance
-                # reasons.
-                try:
-                    async with timeout(180):  # 3 minutes
-                        self.current = await self.set_list.get()
-                except asyncio.TimeoutError:
-                    self.bot.loop.create_task(self.stop())
-                    self.exists = False
-                    return
+                if not self.loop:
+                    try:
+                        async with timeout(600):  # 10 minutes
+                            self.current = await self.set_list.get()
 
-            self.current.source.volume = self._volume
-            self.voice.play(self.current.source, after=self.play_next_song)
-            await self.current.source.channel.send(embed=self.current.create_embed())
+                    except asyncio.TimeoutError:
+                        self.bot.loop.create_task(self.stop())
+                        self.exists = False
+                        return
 
-            await self.next.wait()
+                self.current.source.volume = self._volume
+                self.voice.play(self.current.source, after=self.play_next_song)
+                await self.info.send(embed=self.current.create_embed())
+
+                await self.next.wait()
+        except:
+            print("HMM")
 
     def play_next_song(self, error=None):
         if error:

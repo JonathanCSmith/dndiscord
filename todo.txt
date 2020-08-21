@@ -60,29 +60,62 @@ Randoms:
     [DONE] Upgrade -> Improvement
     [DONE] Staff -> Employees
     [DONE] Translation manager auto add on data pack add
+    [DONE] More than one business
+    [DONE] Customers are interested without the correct services being offered
+    [DONE] Long post for reminders
+    [DONE] Same game name prevention in game_master
+    [DONE] Remember volume preferences
+    [DONE] move away from stupid prefetch paradigm it messes with our permisson states too much
+    [DONE] Play immediate
+    [DONE] up enter
+    [DONE] Better GUI Modality - data pack vs Tavern sim vs multiple businesses?
+    [DONE] When bot leaves due to inactivity - we cannot restart
+    [DONE] Centralize day passing into business controller so we don't double up on code
 
-    [TODO] up enter
-    [TODO] tab complete
-    [TODO] move away from stupid prefetch paradigm it messes with our permisson states too much
-    [TODO] personal inventories
-    [TODO] more localizations
-    [TODO] cannot dm on reload_translations
-    [TODO] Fantasy Staff names (handbook data pack?)
-    [TODO] More than one business
-    [TODO] Furniture should not be in building, but room props
-    [TODO] Calendar + Currency etc in campaign management data pack???!
-    [TODO] Datapacks as python?
-    [TODO] Earmark key datapack tags somewhere!
-    [TODO] Validate some of our tags?
-    [TODO] Business reset
-    [TODO] Business viewer for separate debugging.
-    [TODO] End of day simulation
-    [TODO] Speed build and game day cycling in gui
-    [TODO] Day pass in business
-    [TODO] Business gui, don't like the two menu system.
-    [TODO] Better GUI Modality - data pack vs Tavern sim vs multiple businesses?
-    [TODO] Sessions
-    [TODO] Translations
+    [CANTFIX] tab complete
+
+    [TODO] Globals
+        [TODO] Clear down on exit / refresh etc
+        [TODO] Calendar + Currency etc in campaign management data pack???!
+        [TODO] cannot dm on reload_translations
+        [TODO] cannot dm a lot of things I would expect to be able to?
+        [TODO] Translations
+        [TODO] Data Pack archetypes
+        [TODO] Proper handling of translations and data packs for reloading so the bot does not have to restart
+
+    [TODO] Harpers work
+        [TODO] Errors playing
+        [TODO] Play when not summoned
+        [TODO] Loop failure
+
+    [TODO] Inventories
+        [TODO] personal inventories
+
+    [TODO] Business
+        [TODO] GUI Resizing behaviours across sliders, tabs and button updates
+        [TODO] Renaming business should remove old business
+        [TODO] Business gui, don't like the two menu system.
+        [TODO] Day pass in business !!!!!!
+        [TODO] Speed build and game day cycling in gui
+        [TODO] End of day simulation
+        [TODO] Business reset
+        [TODO] Earmark key datapack tags somewhere!
+        [TODO] Validate some of our tags?
+        [TODO] Datapacks as python?
+        [TODO] Furniture should not be in building, but room props
+        [TODO] Fantasy Staff names (handbook data pack?)
+
+        [TODO] Datapack rework
+            1) 2 Tiered Datapack Generator. Code Wrapper & GUI
+            2) Regenerate datapack w/ changes
+            3) Allow editing of data packs in gui
+            4) Resume simulation
+            EXTRA) Inherit off of something in base?
+
+            The business data should record where it's data pack is located.
+
+    [TODO] Calendar
+        [TODO] Clean up
 
 
 Notes:

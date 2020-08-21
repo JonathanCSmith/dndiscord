@@ -92,4 +92,4 @@ def load(file):
         if isinstance(obj, ContextDependent):
             obj.set_file_location(os.path.dirname(file))
 
-        return obj
+    return obj

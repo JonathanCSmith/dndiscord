@@ -2,6 +2,8 @@ from utils.messages import LongMessage
 
 
 async def build_status_view_players(business, translation_manager, ctx):
+    data_pack = business.get_data_pack()
+
     # Create our status representation in long message form
     long_message = LongMessage()
 
@@ -91,8 +93,10 @@ async def build_status_view_players(business, translation_manager, ctx):
     long_message.add("===================================")
     long_message.add("The following sales and services are offered by your business:")
     long_message.add("===================================")
-    for offering in offered:
+    for offering_name in offered:
+        offering = data_pack.get_service(offering_name)
         long_message.add(str(offering))
+        # TODO: Add amount offered
 
     # Offering
     sales = business.get_most_recent_sales_history()
