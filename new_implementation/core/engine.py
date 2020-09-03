@@ -1,40 +1,43 @@
-from discord.ext import commands
-from discord.ext.commands import Bot, Cog
-
-
-class CommandRunError(commands.CommandError):
-    def __init__(self, detail, *args, **kwargs):
-        self.detail = detail
-
-
-class DnDiscordCog(Cog):
-    def __init__(self, bot, engine):
-        self.bot = bot
-        self.engine = engine
-
-    def cog_check(self, ctx: commands.Context):
-        if not ctx.guild:
-            raise commands.NoPrivateMessage('`This command can\'t be used in DM channels.`')
-
-        return True
-
-    # async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-    #     if isinstance(error, CommandRunError):
-    #         await ctx.send(error.detail)
-    #         return
-    #
-    #     await ctx.send('`An error occurred: {}`'.format(str(error)))
+from new_implementation.core.permissions_handler import PermissionsHandler
+from new_implementation.core.resource_handler import ResourceHandler
 
 
 class Engine:
-    def __init__(self):
-        pass
+    def __init__(self, engine_name):
+        self.engine_name = engine_name
+        self.memory_mutex = False  # Definitely not threadsafe?
+        self.listeners = dict()
+
+        self.resource_handler = ResourceHandler(self)
+        self.permissions_handler = PermissionsHandler(self)
+
+    def get_engine_name(self):
+        return self.engine_name
+
+    def get_resource_handler(self):
+        return self.resource_handler
+
+    def get_permission_handler(self):
+        return self.permissions_handler
+
+    def register_event_class(self, clazz):
+        if clazz not in self.listeners:
+            self.listeners[clazz] = list()
+
+    def register_event_class_listener(self, clazz, listener):
+        if clazz not in self.listeners:
+            return False
+
+        self.listeners[clazz].append(listener)
+
+    def get_event_class_listeners(self, clazz):
+        return self.listeners[clazz]
+
+    def is_memory_mutex_locked(self):
+        return self.memory_mutex
+
+    async def purge_memory(self):
+        self.memory_mutex = True
+        self.memory_mutex = False
 
 
-class EditMessageReceiveBot(Bot):
-    def __init__(self, **options):
-        super().__init__(**options)
-
-    # Replay messages on edit
-    async def on_message_edit(self, before, after):
-        await self.on_message(after)

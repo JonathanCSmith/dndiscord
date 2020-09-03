@@ -1,32 +1,25 @@
-class PlayerData:
-    def __init__(self, player_id, player_name, character_name):
-        self.player_id = player_id
-        self.player_name = player_name
-        self.character_name = character_name
-
-    def get_player_id(self):
-        return self.player_id
-
-    def get_player_name(self):
-        return self.player_name
-
-    def get_character_name(self):
-        return self.character_name
-
-    def __str__(self):
-        return "Player entry for: " + self.player_name + " - Their character is: " + self.character_name
+from new_implementation.data.data import ModuleDataHolder, PermissionHolder
 
 
-class GameData:
-    def __init__(self, guild_id, game_name, game_master_id, game_master_name, game_days=0, players=None, permissions=None):
+class GameData(ModuleDataHolder, PermissionHolder):
+    def __init__(self, guild_id, game_name, game_master_id, game_master_name, game_channel="", gm_channel="", players=None, permissions=None):
+        super().__init__()
+
         self.guild_id = guild_id
         self.game_name = game_name
         self.game_master_id = game_master_id
         self.game_master_name = game_master_name
-        self.game_days = game_days
+
+        if game_channel == "":
+            game_channel = "[DNDiscord] " + game_name
+        self.game_channel = game_channel
+
+        if gm_channel == "":
+            gm_channel = "[DNDiscord] " + game_name + " (GM)"
+        self.gm_channel = gm_channel
 
         if not players:
-            players = dict()
+            players = list()
         self.players = players
 
         if permissions is None:
@@ -42,17 +35,20 @@ class GameData:
     def get_gm(self):
         return self.game_master_id
 
-    def increment_day(self):
-        self.game_days += 1
+    def get_game_channel(self):
+        return self.game_channel
 
-    def get_days_passed(self):
-        return self.game_days
+    def set_game_channel(self, game_channel):
+        self.game_channel = game_channel
+
+    def get_gm_channel(self):
+        return self.gm_channel
+
+    def set_gm_channel(self, gm_channel):
+        self.gm_channel = gm_channel
 
     def get_players(self):
         return self.players
-
-    def get_player(self, player_id):
-        return self.players[player_id]
 
     def is_player(self, player_id):
         return player_id in self.players
@@ -76,3 +72,6 @@ class GameData:
             return self.permissions[permission_name]
         else:
             return -1
+
+    def set_permission_level(self, permission_name, level):
+        self.permissions[permission_name] = level

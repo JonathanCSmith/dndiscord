@@ -1,10 +1,111 @@
 # TODO
-    Investigate mentions for nicknamed members when adding players
-    A user can have the same game name across multiple guilds. Guilds is guaranteed to be unique.
-    Audio impl
-    Days may be something best not placed in 'game' and may just be better in calendar and don't try to make it generic. The issue with this is the listener system
-    Scenes!
+    Features:
+        Core:
+            Better permissions model across the board
+                Serialize out defaults
+                administrator roles
+                Permissions change for roles & commands
+                Elevated roles in functions are added to deco
+                Generic permission data obj
+                Game should be 'permission holder', is gm == is owner, is member == in party
+            Centralize main roles
+            Bot role in core
+            Intra-cog communications?
+            Documentation
+            Logging
+            Proper channel usage
+            Permissions
+            Testing
+        Audio:
+            Embed for playlist not showing
+            Logging
+            Proper channel usage
+            Permissions
+            Testing
+        Calendar module implementation:
+            Relevant to guilds on their own?
+            Switch calendar to instance tied permissions
+            Generic impl of calendar (day counter)
+            Permissions by nickname
+            Logging
+            Proper channel usage [Reminders etc]
+            Permissions
+            Testing
+        Scenes implementation:
+            Task it out
+            Logging
+            Proper channel usage
+            Permissions
+            Testing
+        Channels:
+            Permissions
+            Testing
+        Pack Creator
+            Testing
+        Pack Template Dumper
+            Testing
+    QOL:
+        Switch to ints for everything id wise
+        Memory mutex stuff
+        Update docs to be formatted in a way that's useful for the users
+        Long message generic stuff like line breaks or =================== etc
+        Save game everywhere should perhaps have a wrapper? It's not always clear why you should be saving the game when you have a calendar for example. Doing it once somewhere may make it more obvious
+        Log to file
+        No DM but personal text channel?
+        Only parse info from game channels?
+        Configurable Bot Channels category string
+        Game category
+        Save default admin permissions somewhere
+        Default role name
+        Dndiscord add to admin or some self assigned role and add to all channels etc
+        Adhere to server limits
+        Configurable roles for permissions setters
+        Common permissions obj parent
+    Bugfix:
+        Investigate mentions for nicknamed members when adding players
 
 # Done
-    I Removed a user specifiable channel for audio player notifications.
-    Up enter not working again
+    Features:
+        Core:
+            A user can have the same game name across multiple guilds. Guilds is guaranteed to be unique.
+            Listeners archetype
+            Main entrant polymorphism.
+                GameCog -> CoreCog? Separate
+                Bot reference vs engine reference
+            Game - players vs party
+            Check game channels don't exist
+            Permissions modification
+            Per game permissions
+        Audio:
+            Audio impl
+            Dual bot audio
+            I Removed a user specifiable channel for audio player notifications.
+            Run through all of audio and document
+        Calendar module implementation:
+            Days may be something best not placed in 'game' and may just be better in calendar and don't try to make it generic. The issue with this is the listener system
+            Extensible data
+            Non-day specific implementation
+            Generic Resource Pack Impl
+            Waterdeep implementation
+            Generic impl of reminders
+                Add reminder
+                Remove reminder
+                List reminders (to do and all)
+                Day pass reminders
+                    Add recurring dynamically on ticks
+                Recurring duration
+                Add new on done
+            Reminders
+                Private
+                Party
+                GM
+                Recurring
+        Channels:
+            Log channel - message would need to be sent to a guild channel!
+                Renameable
+            Permissions setting
+            Change DMs to here.
+                Left active game info - that doesnt work with the game channel stuff
+            Renamable channels
+    QOL:
+        Up enter not working again

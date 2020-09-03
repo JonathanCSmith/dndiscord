@@ -1,3 +1,8 @@
+import discord
+
+from new_implementation.utils import utils
+
+
 class LongMessageIterator:
     def __init__(self, message, max_length=2000):
         self._message = message
@@ -57,26 +62,67 @@ class LongMessage:
         return LongMessageIterator(self)
 
 
-async def send_message(ctx, message, is_dm=False, embed=None):
+# TODO: Translation handling!
+async def send_message(ctx, message, is_dm=False, channel=None, embed=None):
     if isinstance(message, LongMessage):
         async with ctx.typing():
             for message_part in message:
                 if is_dm:
                     await ctx.author.send(message_part)
-                    if embed:
-                        await ctx.author.send(embed=embed)
+
+                elif channel:
+                    await channel.send(message_part)
 
                 else:
                     await ctx.send(message_part)
-                    if embed:
-                        await ctx.author.send(embed=embed)
+        if is_dm:
+            await ctx.author.send(embed=embed)
+        elif channel:
+            await channel.send(embed=embed)
+        else:
+            await ctx.send(embed=embed)
     else:
         if is_dm:
             await ctx.author.send("`" + message + "`")
             if embed:
                 await ctx.author.send(embed=embed)
-
+        elif channel:
+            await channel.send("`" + message + "`")
+            if embed:
+                await channel.send(embed=embed)
         else:
             await ctx.send("`" + message + "`")
             if embed:
-                await ctx.author.send(embed=embed)
+                await ctx.send(embed=embed)
+
+
+async def log(engine, ctx, message):
+    # Log to file
+
+    # Try to get the log channel
+    guild_data = await engine.get_guild_data_for_context(ctx)
+    channel_name = guild_data.get_log_channel_name()
+
+    # Category handling
+    category = discord.utils.get(ctx.guild.categories, name="Bot Channels")
+    if category is None:
+        category = await ctx.guild.create_category("Bot Channels")
+
+    # Admin role
+    admin_role = discord.utils.get(ctx.guild.roles, name="@admin")
+    overwrites = {
+        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False),
+        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+
+    # Channel handling
+    channel = discord.utils.get(ctx.guild.text_channels, name=channel_name)
+    if channel is None:
+        channel = await ctx.guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
+
+    # Ensure the name is saved correctly
+    guild_data.set_log_channel_name(channel.name)
+    await engine.save_guild_data_for_context(ctx)
+
+    # Inform
+    return await send_message(ctx, message, is_dm=False, channel=channel, embed=None)

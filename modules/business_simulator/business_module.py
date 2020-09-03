@@ -358,7 +358,7 @@ class BusinessSimulator(Module):
         # TODO: Inventory integration
 
         # Apply the purchase
-        game_days = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        game_days = self.game_master.get_active_game_for_context(ctx).get_ticks_passed()
         if await business.apply_improvement(item, amount, game_days):
             await self.set_business_for_context(ctx, business)
             return await ctx.send("`The improvement has been purchased!`")
@@ -391,7 +391,7 @@ class BusinessSimulator(Module):
 
         # Get the current day
         game = self.game_master.get_active_game_for_context(ctx)
-        current_day = game.get_days_passed()
+        current_day = game.get_ticks_passed()
 
         # Apply the purchase
         if await business.apply_contract(item, amount, current_day):
@@ -426,7 +426,7 @@ class BusinessSimulator(Module):
         staff_name = names.get_full_name()
 
         # Apply the purchase
-        game_days = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        game_days = self.game_master.get_active_game_for_context(ctx).get_ticks_passed()
         if await business.hire_employee(item, staff_name, game_days):
             await self.set_business_for_context(ctx, business)
             return await ctx.send("`A new staff member named: " + staff_name + " has been hired!`")

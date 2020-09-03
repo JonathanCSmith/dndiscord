@@ -2,6 +2,70 @@ import os
 import json
 from collections import OrderedDict
 
+from discord import Role
+
+
+class PermissionData:
+    def __init__(self, minimum_execute_level=-1, allowed_roles=None):
+        self.minimum_execute_level = minimum_execute_level
+
+        if allowed_roles is None:
+            allowed_roles = set()
+        self.allowed_roles = allowed_roles
+
+    def get_minimum_execution_level(self):
+        return self.minimum_execute_level
+
+    def set_minimum_execution_level(self, minimum_execute_level):
+        self.minimum_execute_level = minimum_execute_level
+
+    def get_allowed_roles(self):
+        return self.allowed_roles
+
+    def add_allowed_role(self, role: Role):
+        self.allowed_roles.append(role.name)
+
+    def remove_allowed_role(self, role: Role):
+        self.allowed_roles.remove(role.name)
+
+
+class PermissionHolder:
+    def __init__(self, permissions=None, default_permissions=None):
+        if permissions is None:
+            permissions = dict()
+        self.permissions = permissions
+
+        if default_permissions is None:
+            default_permissions = dict()
+        self.default_permissions = default_permissions
+
+    def get_permissions_for(self, id):
+        if id in self.permissions:
+            return self.permissions[id]
+
+        return PermissionData()
+
+    def get_default_permissions_for(self, id):
+        if id in self.permissions:
+            return self.permissions[id]
+
+        return PermissionData()
+
+
+class ModuleDataHolder:
+    def __init__(self, module_data=None):
+        if module_data is None:
+            module_data = dict()
+        self.module_data = module_data
+
+    def get_module_data(self, key):
+        if key in self.module_data:
+            return self.module_data[key]
+        return None
+
+    def set_module_data(self, key, module_data):
+        self.module_data[key] = module_data
+
 
 class SerializationModifier:
     def __init__(self):

@@ -1,10 +1,12 @@
-class PermissionContext:
-    ANY = 0
-    GUILD = 1
-    GAME = 2
+import enum
 
 
-class PermissionLevel:
+class PermissionContext(enum.IntEnum):
+    GUILD = 0
+    GAME = 1
+
+
+class PermissionLevel(enum.IntEnum):
     ANY = 0
     SPECIAL_ROLE = 1
     PARTY = 2

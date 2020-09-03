@@ -10,8 +10,8 @@ from discord.ext import commands
 
 from new_implementation.audio.sources.source import SourceError
 from new_implementation.audio.sources.ytdl_source import YTDLSource
-from new_implementation.core.engine import DnDiscordCog
-from new_implementation.handlers.permissions_handler import PermissionLevel
+from new_implementation.bots.cogs import DnDiscordCog
+from new_implementation.core.permissions_handler import PermissionLevel
 from new_implementation.utils import utils
 from new_implementation.utils.message import send_message
 
@@ -92,9 +92,9 @@ class Playlist(asyncio.Queue):
 
 
 class AudioPlayer:
-    def __init__(self, bot):
-        self.bot = bot
-        self.player = self.bot.loop.create_task(self.audio_player_task())
+    def __init__(self, engine):
+        self.engine = engine
+        self.player = self.engine.loop.create_task(self.audio_player_task())
 
         self.exists = True
         self.current_track = None
@@ -127,7 +127,7 @@ class AudioPlayer:
 
     @property
     def is_playing(self):
-        return self.voice_channel is not None and self.current_track is not None
+        return self.voice_channel is not None and self.voice_channel.is_playing() and self.current_track is not None
 
     async def audio_player_task(self):
         try:
@@ -140,9 +140,11 @@ class AudioPlayer:
                             self.current_track = await self.playlist.get()
 
                     except asyncio.TimeoutError:
-                        self.bot.loop.create_task(self.stop())
+                        self.engine.loop.create_task(self.stop())
                         self.exists = False
                         return
+                else:
+                    await self.current_track.source.recreate()
 
                 self.current_track.source.volume = self.volume
                 self.voice_channel.play(self.current_track.source, after=self.play_next_track)
@@ -176,8 +178,8 @@ class AudioPlayer:
 
 
 class AudioCog(DnDiscordCog):
-    def __init__(self, bot, engine, command_prefix, audio_bot_type):
-        super().__init__(bot, engine)
+    def __init__(self, engine, command_prefix, audio_bot_type):
+        super().__init__(engine)
 
         self.command_prefix = command_prefix
         self.audio_bot_type = audio_bot_type
@@ -193,19 +195,26 @@ class AudioCog(DnDiscordCog):
         self.kick_command.name = self.command_prefix + ":kick"
         self.notify_command.name = self.command_prefix + ":notify"
         self.play_now_command.name = self.command_prefix + ":play_now"
-        self.play_now_command.name = self.command_prefix + ":play"
-        self.play_now_command.name = self.command_prefix + ":pause"
-        self.play_now_command.name = self.command_prefix + ":resume"
-        self.play_now_command.name = self.command_prefix + ":skip"
-        self.play_now_command.name = self.command_prefix + ":stop"
+        self.play_command.name = self.command_prefix + ":play"
+        self.pause_command.name = self.command_prefix + ":pause"
+        self.resume_command.name = self.command_prefix + ":resume"
+        self.next_command.name = self.command_prefix + ":next"
+        self.stop_command.name = self.command_prefix + ":stop"
         self.volume_command.name = self.command_prefix + ":volume"
-        self.volume_command.name = self.command_prefix + ":repeat"
-        self.volume_command.name = self.command_prefix + ":currently_playing"
-        self.volume_command.name = self.command_prefix + ":playlist"
+        self.repeat_command.name = self.command_prefix + ":repeat"
+        self.now_command.name = self.command_prefix + ":currently_playing"
+        self.list_command.name = self.command_prefix + ":playlist"
 
     def cog_unload(self):
         for audio_player in self.audio_players.values():
-            self.bot.loop.create_task(audio_player.stop())
+            self.engine.loop.create_task(audio_player.stop())
+
+    def is_existing_audio_player(self, ctx: commands.Context):
+        guild_id = utils.get_guild_id_from_context(ctx)
+        if guild_id in self.audio_players:
+            return True
+
+        return False
 
     def get_audio_player_for_context(self, ctx: commands.Context):
         guild_id = utils.get_guild_id_from_context(ctx)
@@ -213,7 +222,7 @@ class AudioCog(DnDiscordCog):
             return self.audio_players[guild_id]
 
         # Build a new audio player
-        audio_player = AudioPlayer(self.bot)
+        audio_player = AudioPlayer(self.engine)
         self.audio_players[guild_id] = audio_player
         return audio_player
 
@@ -289,8 +298,7 @@ class AudioCog(DnDiscordCog):
                 return await send_message(ctx, reason)
 
         # Get the audio player and stop it
-        audio_player = self.get_audio_player_for_context(ctx)
-        if audio_player:
+        if self.is_existing_audio_player(ctx):
             await self.delete_audio_player(ctx)
             return await send_message(ctx, "Goodbye!")
         else:
@@ -299,8 +307,9 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:notify")
     async def notify_command(self, ctx: commands.Context):
         """
+        This command changes the channel that gets notified of automatic track changes.
 
-        :param ctx:
+        :param ctx: The invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -331,9 +340,10 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:play_now")
     async def play_now_command(self, ctx: commands.Context, *, info: str):
         """
+        This command plays the provided track (searches against youtube) regardless of the songs already in the playlist. Note if a song is already playing it will be skipped.
 
-        :param ctx:
-        :param info:
+        :param ctx: The invocation context
+        :param info: The link or keywords associated with the song
         :return:
         """
         # Check if we the caller is a game master
@@ -358,7 +368,7 @@ class AudioCog(DnDiscordCog):
         async with ctx.typing():
             try:
                 # Create a youtube-dl source
-                source = await YTDLSource.create_source(ctx, info, loop=self.bot.loop)
+                source = await YTDLSource.create_source(ctx, info, loop=self.engine.loop)
 
             except SourceError as e:
                 return await send_message(ctx, "I encountered the following issue: {} - when trying to play your request".format(str(e)))
@@ -372,9 +382,10 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:play")
     async def play_command(self, ctx: commands.Context, *, info: str):
         """
+        This command adds the provided track (searches against youtube) to the playlist
 
-        :param ctx:
-        :param info:
+        :param ctx: The invocation context
+        :param info: The link or keywords associated with the song
         :return:
         """
         # Check if we the caller is a game master
@@ -399,7 +410,7 @@ class AudioCog(DnDiscordCog):
         async with ctx.typing():
             try:
                 # Create a youtube-dl source
-                source = await YTDLSource.create_source(ctx, info, loop=self.bot.loop)
+                source = await YTDLSource.create_source(ctx, info, loop=self.engine.loop)
 
             except SourceError as e:
                 return await send_message(ctx, "I encountered the following issue: {} - when trying to play your request".format(str(e)))
@@ -407,13 +418,14 @@ class AudioCog(DnDiscordCog):
             else:
                 track = Track(source, info)
                 await audio_player.playlist.put(track)
-                await send_message(ctx, "Playing: ", embed=track.create_embed())
+                await send_message(ctx, "The following song will be played when it comes up in the playlist: ", embed=track.create_embed())
 
     @commands.command(name="audio_player:pause")
     async def pause_command(self, ctx: commands.Context):
         """
+        Pauses the current track
 
-        :param ctx:
+        :param ctx: the invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -431,7 +443,7 @@ class AudioCog(DnDiscordCog):
 
         # Check that we have an audio player and that the audio player has been summoned and that the audio player is playing something
         audio_player = self.get_audio_player_for_context(ctx)
-        if not audio_player.is_playing() or not audio_player.is_playing:
+        if not audio_player.is_playing:
             return await send_message(ctx, "The " + self.audio_bot_type + " is not currently running.")
 
         audio_player.voice_channel.pause()
@@ -440,6 +452,7 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:resume")
     async def resume_command(self, ctx: commands.Context):
         """
+        Resumes the current track
 
         :param ctx:
         :return:
@@ -459,18 +472,19 @@ class AudioCog(DnDiscordCog):
 
         # Check that there is an audio player, that the audio player has a voice, that the audio player could be playing but is paused
         audio_player = self.get_audio_player_for_context(ctx)
-        if audio_player.is_playing() and audio_player.is_playing and audio_player.voice_channel.is_paused():
+        if audio_player.is_playing and audio_player.voice_channel.is_paused():
             audio_player.voice_channel.resume()
             return await send_message(ctx, "The " + self.audio_bot_type + " has been resumed.")
 
         # Inform failure
         return await send_message(ctx, "The " + self.audio_bot_type + " was not in the correct state to handle that command. Try summoning, playing and then pausing something first!")
 
-    @commands.command(name="audio_player:skip")
-    async def skip_command(self, ctx: commands.Context):
+    @commands.command(name="audio_player:next")
+    async def next_command(self, ctx: commands.Context):
         """
+        Goes to the next song in the playlist
 
-        :param ctx:
+        :param ctx: The invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -488,7 +502,7 @@ class AudioCog(DnDiscordCog):
 
         # Check that there is an audio player and that they are playing something
         audio_player = self.get_audio_player_for_context(ctx)
-        if not audio_player.is_playing() or not audio_player.is_playing:
+        if not audio_player.is_playing:
             return await send_message(ctx, "The " + self.audio_bot_type + " is not playing anything right now.")
 
         # Skip the song
@@ -498,8 +512,9 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:stop")
     async def stop_command(self, ctx: commands.Context):
         """
+        Stops the player completely - the playlist will be wiped!
 
-        :param ctx:
+        :param ctx: Invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -517,10 +532,13 @@ class AudioCog(DnDiscordCog):
 
         # Check that there is an audio player and that they are playing something
         audio_player = self.get_audio_player_for_context(ctx)
-        if not audio_player.is_playing() or not audio_player.is_playing:
+        if not audio_player.is_playing:
             return await send_message(ctx, "The " + self.audio_bot_type + " is not playing anything right now.")
 
         # Clear the playlist and stop the audio player
+        if audio_player.loop:
+            audio_player.loop = False
+
         audio_player.playlist.clear()
         audio_player.voice_channel.stop()
         return await send_message(ctx, "The " + self.audio_bot_type + " has been stopped and the playlist cleared.")
@@ -528,9 +546,10 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:volume")
     async def volume_command(self, ctx: commands.Context, volume: str = ""):
         """
+        Adjusts the voluem of the music player
 
-        :param ctx:
-        :param volume:
+        :param ctx: The invocation context
+        :param volume: a volume between 0 and 100
         :return:
         """
         # Check if we the caller is a game master
@@ -569,8 +588,9 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:repeat")
     async def repeat_command(self, ctx: commands.Context):
         """
+        Enables repeat mode. The currently playing song will be repeated until disabled.
 
-        :param ctx:
+        :param ctx: The invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -588,7 +608,7 @@ class AudioCog(DnDiscordCog):
 
         # Check that there is an audio player and that they are playing something
         audio_player = self.get_audio_player_for_context(ctx)
-        if not audio_player.is_playing() or not audio_player.is_playing:
+        if not audio_player.is_playing:
             return await send_message(ctx, "The " + self.audio_bot_type + " is not playing anything right now.")
 
         # Invert the current loop state
@@ -602,8 +622,9 @@ class AudioCog(DnDiscordCog):
     @commands.command(name="audio_player:now")
     async def now_command(self, ctx: commands.Context):
         """
+        A function to display the currently playing track
 
-        :param ctx:
+        :param ctx: the invocation context
         :return:
         """
         # Check if we the caller is a game master
@@ -621,22 +642,24 @@ class AudioCog(DnDiscordCog):
 
         # Check that there is an audio player and that they are playing something
         audio_player = self.get_audio_player_for_context(ctx)
-        if not audio_player.is_playing() or not audio_player.is_playing:
+        if not audio_player.is_playing:
             return await send_message(ctx, "The " + self.audio_bot_type + " is not playing anything right now.")
 
         # Send the current song
         if audio_player.current_track:
-            return await send_message(ctx, "The current track playing for " + self.audio_bot_type + " is: ", embed=audio_player.current_track.create_enbed())
+            return await send_message(ctx, "The current track playing for " + self.audio_bot_type + " is: ", embed=audio_player.current_track.create_embed())
         else:
             return await send_message(ctx, "There is no current track playing for " + self.audio_bot_type)
 
-
-    @commands.command(name="audio_player:list")
+    @commands.command(name="audio_player:playlist")
     async def list_command(self, ctx: commands.Context, page: int = 1):
         """
+        A commmand to list the current tracks in the queue for this music player
 
-        :param ctx:
-        :param page:
+        TODO: Fix embeds
+
+        :param ctx: the invocation context
+        :param page: the page (optional - default is 1) to query
         :return:
         """
         # Check if we the caller is a game master
@@ -668,4 +691,4 @@ class AudioCog(DnDiscordCog):
         for i, track in enumerate(audio_player.playlist[start:end], start=start):
             queue += "`{0}.` [**{1.source.title}**]({1.source.url})\n".format(i + 1, track)
         embed = (discord.Embed(description="`**{} tracks: **\n\n`".format(len(audio_player.playlist), queue)).set_footer(text="`Viewing page {}/{}`".format(page, pages)))
-        return ctx.send(embed=embed)
+        return await ctx.send(embed=embed)

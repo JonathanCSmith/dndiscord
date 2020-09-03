@@ -37,7 +37,7 @@ class CalendarManager(Module, GameStateListener):
         if calendar_days is None:
             return
 
-        days_passed = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        days_passed = self.game_master.get_active_game_for_context(ctx).get_ticks_passed()
         return await ctx.send("`Today is: " + calendar.convert(calendar_days, days_passed) + "`")
 
     async def game_about_to_end(self, ctx, game):
@@ -113,7 +113,7 @@ class CalendarManager(Module, GameStateListener):
 
         # Create and save
         calendar_start_days = Calendar(year, month, day)
-        days_passed = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        days_passed = self.game_master.get_active_game_for_context(ctx).get_ticks_passed()
         day = calendar.convert(calendar_start_days, days_passed)
         await self.set_calendar_for_context(ctx, calendar_start_days)
         return await ctx.send("`Calendar initialized, the current day is: " + day + "`")
@@ -130,5 +130,5 @@ class CalendarManager(Module, GameStateListener):
         if calendar_start_days is None:
             return await ctx.send("`A calendar is not initialized for this game yet`")
 
-        days_passed = self.game_master.get_active_game_for_context(ctx).get_days_passed()
+        days_passed = self.game_master.get_active_game_for_context(ctx).get_ticks_passed()
         return await ctx.send("`Today is: " + calendar.convert(calendar_start_days, days_passed) + "`")

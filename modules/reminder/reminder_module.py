@@ -73,7 +73,7 @@ class ReminderManager(Module, GameStateListener):
     async def game_started(self, ctx, game):
         # Get the game, which cannot be None at this point because of the above
         game = self.game_master.get_active_game_for_context(ctx)
-        current_days = game.get_days_passed()
+        current_days = game.get_ticks_passed()
 
         # Obtain any existing
         reminders = await self.get_reminders_for_context(ctx)
@@ -102,7 +102,7 @@ class ReminderManager(Module, GameStateListener):
 
     async def day_passed(self, ctx, game):
         game = self.game_master.get_active_game_for_context(ctx)
-        current_day = game.get_days_passed()
+        current_day = game.get_ticks_passed()
 
         # Notify the channel of any reminders
         reminders = await self.get_reminders_for_context(ctx)
@@ -140,7 +140,7 @@ class ReminderManager(Module, GameStateListener):
 
         # Get the game, which cannot be None at this point because of the above
         game = self.game_master.get_active_game_for_context(ctx)
-        current_days = game.get_days_passed()
+        current_days = game.get_ticks_passed()
 
         # Obtain any existing
         reminders = await self.get_reminders_for_context(ctx)
@@ -169,7 +169,7 @@ class ReminderManager(Module, GameStateListener):
 
         # Get the game, which cannot be None at this point because of the above
         game = self.game_master.get_active_game_for_context(ctx)
-        current_days = game.get_days_passed()
+        current_days = game.get_ticks_passed()
 
         # Obtain any existing
         reminders = await self.get_reminders_for_context(ctx)
@@ -197,7 +197,7 @@ class ReminderManager(Module, GameStateListener):
 
         # Get the game, which cannot be None at this point because of the above
         game = self.game_master.get_active_game_for_context(ctx)
-        current_days = game.get_days_passed()
+        current_days = game.get_ticks_passed()
 
         # Obtain any existing
         reminders = await self.get_reminders_for_context(ctx)
